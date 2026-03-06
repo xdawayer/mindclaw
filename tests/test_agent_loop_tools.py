@@ -1,0 +1,105 @@
+# input: mindclaw.orchestrator, mindclaw.tools
+# output: Agent Loop 工具集成测试
+# pos: 编排层工具调用集成测试
+# UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
+
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from mindclaw.bus.events import InboundMessage
+from mindclaw.bus.queue import MessageBus
+from mindclaw.config.schema import MindClawConfig
+from mindclaw.llm.router import ChatResult, LLMRouter
+from mindclaw.tools.base import RiskLevel, Tool
+from mindclaw.tools.registry import ToolRegistry
+
+
+class FakeReadTool(Tool):
+    name = "read_file"
+    description = "Read a file"
+    parameters = {
+        "type": "object",
+        "properties": {"path": {"type": "string"}},
+        "required": ["path"],
+    }
+    risk_level = RiskLevel.SAFE
+
+    async def execute(self, params: dict) -> str:
+        return "file content: hello world"
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_with_tool_call():
+    """Agent 应执行工具调用并将结果返回 LLM"""
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+
+    config = MindClawConfig()
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(FakeReadTool())
+
+    agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
+
+    inbound = InboundMessage(
+        channel="cli", chat_id="local", user_id="wzb", username="wzb", text="read test.txt"
+    )
+
+    # First LLM call: return tool call
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "call_1"
+    mock_tool_call.function.name = "read_file"
+    mock_tool_call.function.arguments = json.dumps({"path": "test.txt"})
+
+    call_1 = ChatResult(content=None, tool_calls=[mock_tool_call])
+    # Second LLM call: return final reply
+    call_2 = ChatResult(content="The file contains: hello world", tool_calls=None)
+
+    call_count = 0
+
+    async def mock_chat(messages, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return call_1
+        return call_2
+
+    with patch.object(router, "chat", side_effect=mock_chat):
+        await agent.handle_message(inbound)
+
+    outbound = await bus.get_outbound()
+    assert "hello world" in outbound.text
+    assert call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_max_iterations():
+    """Agent 应在达到最大迭代次数后停止"""
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+
+    config = MindClawConfig(agent={"maxIterations": 3})
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(FakeReadTool())
+
+    agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
+
+    inbound = InboundMessage(
+        channel="cli", chat_id="local", user_id="wzb", username="wzb", text="loop forever"
+    )
+
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "call_1"
+    mock_tool_call.function.name = "read_file"
+    mock_tool_call.function.arguments = json.dumps({"path": "test.txt"})
+
+    infinite_call = ChatResult(content=None, tool_calls=[mock_tool_call])
+
+    with patch.object(router, "chat", return_value=infinite_call):
+        await agent.handle_message(inbound)
+
+    outbound = await bus.get_outbound()
+    assert "max iterations" in outbound.text.lower() or "iteration" in outbound.text.lower()

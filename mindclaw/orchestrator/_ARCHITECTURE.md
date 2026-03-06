@@ -5,4 +5,4 @@
 | 文件 | 地位 | 功能 |
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
-| `agent_loop.py` | 核心 | AgentLoop 主推理循环 (ReAct) |
+| `agent_loop.py` | 核心 | AgentLoop 主推理循环 (ReAct)，含工具调用集成 |
