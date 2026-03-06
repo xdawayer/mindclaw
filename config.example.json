@@ -1,0 +1,14 @@
+{
+  "agent": {
+    "defaultModel": "claude-sonnet-4-20250514",
+    "fallbackModel": "gpt-4o",
+    "maxIterations": 40
+  },
+  "providers": {
+    "anthropic": { "apiKey": "$ANTHROPIC_API_KEY" },
+    "openai": { "apiKey": "$OPENAI_API_KEY" }
+  },
+  "log": {
+    "level": "INFO"
+  }
+}
