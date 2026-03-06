@@ -7,3 +7,5 @@
 | `__init__.py` | 包入口 | 空 |
 | `base.py` | 核心抽象 | Tool ABC + RiskLevel 枚举 |
 | `registry.py` | 核心 | ToolRegistry 注册表 |
+| `shell.py` | 内置工具 | Shell 执行工具 (ExecTool)，含命令黑名单和超时保护 |
+| `web.py` | 内置工具 | WebFetchTool (网页抓取) + WebSearchTool (Brave 搜索) |
