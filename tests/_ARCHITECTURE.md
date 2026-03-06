@@ -11,3 +11,4 @@
 | `test_bus.py` | 单元测试 | 消息总线 (InboundMessage / OutboundMessage / MessageBus) 测试 |
 | `test_agent_loop.py` | 单元测试 | 编排层 Agent Loop (AgentLoop) 测试 |
 | `test_cli_channel.py` | 单元测试 | 渠道层 (BaseChannel / CLIChannel) 测试 |
+| `test_tools_base.py` | 单元测试 | 工具层 (Tool ABC / RiskLevel / ToolRegistry) 测试 |
