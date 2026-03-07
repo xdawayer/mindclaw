@@ -39,6 +39,23 @@ async def test_read_file_path_traversal(workspace):
 
 
 @pytest.mark.asyncio
+async def test_read_file_sibling_prefix_bypass(tmp_path):
+    """Sibling dir with same prefix should be denied (e.g. /project vs /project-evil)."""
+    from mindclaw.tools.file_ops import ReadFileTool
+
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    sibling = tmp_path / "project-evil"
+    sibling.mkdir()
+    secret = sibling / "secret.txt"
+    secret.write_text("top secret")
+
+    tool = ReadFileTool(workspace=workspace)
+    result = await tool.execute({"path": "../project-evil/secret.txt"})
+    assert "denied" in result.lower() or "outside" in result.lower()
+
+
+@pytest.mark.asyncio
 async def test_write_file(workspace):
     from mindclaw.tools.file_ops import WriteFileTool
     tool = WriteFileTool(workspace=workspace)

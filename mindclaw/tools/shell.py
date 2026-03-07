@@ -4,7 +4,9 @@
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
+import os
 import re
+import signal
 from pathlib import Path
 
 from loguru import logger
@@ -61,6 +63,7 @@ class ExecTool(Tool):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(self.workspace),
+                start_new_session=True,
             )
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=self.timeout
@@ -81,8 +84,8 @@ class ExecTool(Tool):
         except asyncio.TimeoutError:
             logger.warning(f"Command timeout after {self.timeout}s: {command}")
             try:
-                proc.kill()
-            except ProcessLookupError:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, OSError):
                 pass
             return f"Error: command timeout after {self.timeout}s"
         except Exception as e:

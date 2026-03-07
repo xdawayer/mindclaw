@@ -67,3 +67,35 @@ def test_llm_router_model_resolution():
     router = LLMRouter(MindClawConfig())
     assert router.resolve_model(None) == "claude-sonnet-4-20250514"
     assert router.resolve_model("gpt-4o") == "gpt-4o"
+
+
+@pytest.mark.asyncio
+async def test_llm_router_injects_provider_credentials():
+    """chat() should inject api_key/api_base from config providers"""
+    from mindclaw.config.schema import MindClawConfig, ProviderSettings
+    from mindclaw.llm.router import LLMRouter
+
+    config = MindClawConfig(
+        providers={"anthropic": ProviderSettings(api_key="sk-test-123", api_base="https://custom.api")}
+    )
+    router = LLMRouter(config)
+
+    mock_response = AsyncMock()
+    mock_response.choices = [AsyncMock()]
+    mock_response.choices[0].message.content = "Hello!"
+    mock_response.choices[0].message.tool_calls = None
+
+    captured_kwargs = {}
+
+    async def capture_acompletion(**kwargs):
+        captured_kwargs.update(kwargs)
+        return mock_response
+
+    with patch("mindclaw.llm.router.acompletion", side_effect=capture_acompletion):
+        await router.chat(
+            messages=[{"role": "user", "content": "Hi"}],
+            model="anthropic/claude-sonnet-4-20250514",
+        )
+
+    assert captured_kwargs["api_key"] == "sk-test-123"
+    assert captured_kwargs["api_base"] == "https://custom.api"

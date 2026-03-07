@@ -25,6 +25,12 @@ class LLMRouter:
     def resolve_model(self, model: str | None) -> str:
         return model or self.config.agent.default_model
 
+    def _extract_provider(self, model: str) -> str | None:
+        """Extract provider from model string (e.g. 'anthropic/claude-...')."""
+        if "/" in model:
+            return model.split("/", 1)[0]
+        return None
+
     async def chat(
         self,
         messages: list[dict],
@@ -40,6 +46,14 @@ class LLMRouter:
         }
         if tools:
             kwargs["tools"] = tools
+
+        provider = self._extract_provider(resolved_model)
+        if provider and provider in self.config.providers:
+            settings = self.config.providers[provider]
+            if settings.api_key:
+                kwargs["api_key"] = settings.api_key
+            if settings.api_base:
+                kwargs["api_base"] = settings.api_base
 
         response = await acompletion(**kwargs)
         message = response.choices[0].message

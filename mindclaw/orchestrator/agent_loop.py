@@ -11,6 +11,7 @@ from mindclaw.bus.events import InboundMessage, OutboundMessage
 from mindclaw.bus.queue import MessageBus
 from mindclaw.config.schema import MindClawConfig
 from mindclaw.llm.router import LLMRouter
+from mindclaw.tools.base import RiskLevel
 from mindclaw.tools.registry import ToolRegistry
 
 SYSTEM_PROMPT = """\
@@ -48,6 +49,8 @@ class AgentLoop:
         tool = self.tool_registry.get(name)
         if tool is None:
             return f"Error: unknown tool '{name}'"
+        if tool.risk_level == RiskLevel.DANGEROUS:
+            logger.warning(f"Executing DANGEROUS tool '{name}' without user approval")
         try:
             params = json.loads(arguments)
             result = await tool.execute(params)

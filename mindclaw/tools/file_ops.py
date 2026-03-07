@@ -12,7 +12,7 @@ def _safe_resolve(workspace: Path, relative_path: str) -> Path | None:
     """Resolve a relative path within a workspace, blocking traversal attacks."""
     try:
         target = (workspace / relative_path).resolve()
-        if not str(target).startswith(str(workspace.resolve())):
+        if not target.is_relative_to(workspace.resolve()):
             return None
         return target
     except (ValueError, OSError):
