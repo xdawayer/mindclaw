@@ -6,4 +6,4 @@
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
 | `base.py` | 核心抽象 | BaseChannel 抽象基类 |
-| `cli_channel.py` | 实现 | CLI 终端渠道 (prompt-toolkit) |
+| `cli_channel.py` | 实现 | CLI 终端渠道 (prompt-toolkit)，asyncio.Event 优雅关闭 |

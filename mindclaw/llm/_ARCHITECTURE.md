@@ -5,4 +5,4 @@
 | 文件 | 地位 | 功能 |
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
-| `router.py` | 核心 | LLMRouter 统一调用接口 + ChatResult 数据类 |
+| `router.py` | 核心 | LLMRouter 统一调用接口 + ChatResult 数据类，含 provider 前缀映射和凭证注入 |
