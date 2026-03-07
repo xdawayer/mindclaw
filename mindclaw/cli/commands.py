@@ -1,4 +1,4 @@
-# input: typer, channels/, orchestrator/, llm/, config/, tools/*
+# input: typer, channels/, orchestrator/, llm/, config/, tools/*, security/approval
 # output: 导出 app (Typer 应用)
 # pos: CLI 入口，用户通过 typer 命令启动 MindClaw
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -15,6 +15,7 @@ from mindclaw.channels.cli_channel import CLIChannel
 from mindclaw.config.loader import load_config
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.agent_loop import AgentLoop
+from mindclaw.security.approval import ApprovalManager
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from mindclaw.tools.registry import ToolRegistry
 from mindclaw.tools.shell import ExecTool
@@ -54,37 +55,74 @@ async def _run_chat(config_path: Path | None) -> None:
     if brave_settings and brave_settings.api_key:
         registry.register(WebSearchTool(api_key=brave_settings.api_key))
 
-    agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
+    # 创建审批管理器
+    approval_manager = ApprovalManager(
+        bus=bus,
+        timeout=config.security.approval_timeout,
+    )
+
+    agent = AgentLoop(
+        config=config,
+        bus=bus,
+        router=router,
+        tool_registry=registry,
+        approval_manager=approval_manager,
+    )
 
     channel = CLIChannel(bus=bus)
 
-    async def agent_consumer():
+    agent_task: asyncio.Task | None = None
+
+    async def _process_message(msg):
+        try:
+            await agent.handle_message(msg)
+        except Exception:
+            logger.exception("Agent error")
+            from mindclaw.bus.events import OutboundMessage
+
+            await bus.put_outbound(
+                OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    text="An internal error occurred. Please try again.",
+                )
+            )
+
+    async def message_router():
+        nonlocal agent_task
         while True:
             msg = await bus.get_inbound()
-            try:
-                await agent.handle_message(msg)
-            except Exception:
-                logger.exception("Agent error")
-                from mindclaw.bus.events import OutboundMessage
 
-                await bus.put_outbound(
-                    OutboundMessage(
-                        channel=msg.channel,
-                        chat_id=msg.chat_id,
-                        text="An internal error occurred. Please try again.",
-                    )
-                )
+            # Route approval replies to ApprovalManager
+            if approval_manager.has_pending() and approval_manager.is_approval_reply(
+                msg.text
+            ):
+                approval_manager.resolve(msg.text)
+                continue
 
-    agent_task = asyncio.create_task(agent_consumer())
+            # Wait for previous agent processing to finish
+            if agent_task is not None and not agent_task.done():
+                try:
+                    await agent_task
+                except Exception:
+                    pass  # Error already handled inside _process_message
+
+            agent_task = asyncio.create_task(_process_message(msg))
+
+    router_task = asyncio.create_task(message_router())
 
     try:
         await channel.start()
     finally:
-        agent_task.cancel()
-        try:
-            await agent_task
-        except asyncio.CancelledError:
-            pass
+        router_task.cancel()
+        if agent_task and not agent_task.done():
+            agent_task.cancel()
+        for t in [router_task, agent_task]:
+            if t:
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
         await channel.stop()
 
 
