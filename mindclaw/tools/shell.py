@@ -1,38 +1,18 @@
-# input: tools/base.py, asyncio, re
+# input: tools/base.py, security/sandbox.py, asyncio
 # output: 导出 ExecTool
-# pos: Shell 执行工具，含命令黑名单和超时保护
+# pos: Shell 执行工具，含超时保护，命令黑名单委托给 security/sandbox
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
 import os
-import re
 import signal
 from pathlib import Path
 
 from loguru import logger
 
+from mindclaw.security.sandbox import is_command_denied
+
 from .base import RiskLevel, Tool
-
-# Best-effort heuristic blocklist; real security boundary is the DANGEROUS risk level gate
-DENY_PATTERNS = [
-    r"rm\s+-rf\s+/",
-    r"dd\s+if=",
-    r"mkfs\.",
-    r":\(\)\{.*\}",
-    r">\s*/dev/sd",
-    r"chmod\s+-R\s+777\s+/",
-    r"curl.*\|\s*sh",
-    r"wget.*\|\s*sh",
-]
-
-_compiled_deny = [re.compile(p) for p in DENY_PATTERNS]
-
-
-def _is_denied(command: str) -> bool:
-    for pattern in _compiled_deny:
-        if pattern.search(command):
-            return True
-    return False
 
 
 class ExecTool(Tool):
@@ -52,7 +32,7 @@ class ExecTool(Tool):
     async def execute(self, params: dict) -> str:
         command = params["command"]
 
-        if _is_denied(command):
+        if is_command_denied(command):
             logger.warning(f"Blocked denied command: {command}")
             return "Error: command denied by security policy"
 

@@ -16,3 +16,4 @@
 | `test_tools_web.py` | 单元测试 | 工具层网页操作 (WebFetchTool 流式抓取 / SSRF 防护 / WebSearchTool) 测试 |
 | `test_tools_file_ops.py` | 单元测试 | 工具层文件操作 (ReadFile/WriteFile/EditFile/ListDir + 路径沙箱) 测试 |
 | `test_agent_loop_tools.py` | 集成测试 | 编排层 Agent Loop 工具调用集成 (ReAct 循环 + 最大迭代 + 危险工具拦截) 测试 |
+| `test_security_sandbox.py` | 单元测试 | 安全层沙箱 (is_command_denied 命令黑名单 / validate_path 路径沙箱) 测试 |

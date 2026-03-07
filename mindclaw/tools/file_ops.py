@@ -1,11 +1,13 @@
-# input: tools/base.py, pathlib, os, tempfile
+# input: tools/base.py, security/sandbox.py, pathlib, os, tempfile
 # output: 导出 ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
-# pos: 文件操作工具集，带路径沙箱保护和原子写入
+# pos: 文件操作工具集，带原子写入，路径沙箱委托给 security/sandbox
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import os
 import tempfile
 from pathlib import Path
+
+from mindclaw.security.sandbox import validate_path
 
 from .base import RiskLevel, Tool
 
@@ -27,17 +29,6 @@ def _atomic_write(target: Path, content: str) -> None:
         raise
 
 
-def _safe_resolve(workspace: Path, relative_path: str) -> Path | None:
-    """Resolve a relative path within a workspace, blocking traversal attacks."""
-    try:
-        target = (workspace / relative_path).resolve()
-        if not target.is_relative_to(workspace.resolve()):
-            return None
-        return target
-    except (ValueError, OSError):
-        return None
-
-
 class ReadFileTool(Tool):
     name = "read_file"
     description = "Read the contents of a file. Path is relative to workspace."
@@ -54,7 +45,7 @@ class ReadFileTool(Tool):
         self.workspace = workspace
 
     async def execute(self, params: dict) -> str:
-        target = _safe_resolve(self.workspace, params["path"])
+        target = validate_path(self.workspace, params["path"])
         if target is None:
             return "Error: path denied - outside workspace"
         if not target.exists():
@@ -87,7 +78,7 @@ class WriteFileTool(Tool):
         self.workspace = workspace
 
     async def execute(self, params: dict) -> str:
-        target = _safe_resolve(self.workspace, params["path"])
+        target = validate_path(self.workspace, params["path"])
         if target is None:
             return "Error: path denied - outside workspace"
         try:
@@ -119,7 +110,7 @@ class EditFileTool(Tool):
         self.workspace = workspace
 
     async def execute(self, params: dict) -> str:
-        target = _safe_resolve(self.workspace, params["path"])
+        target = validate_path(self.workspace, params["path"])
         if target is None:
             return "Error: path denied - outside workspace"
         if not target.exists():
@@ -154,7 +145,7 @@ class ListDirTool(Tool):
 
     async def execute(self, params: dict) -> str:
         rel_path = params.get("path", ".")
-        target = _safe_resolve(self.workspace, rel_path)
+        target = validate_path(self.workspace, rel_path)
         if target is None:
             return "Error: path denied - outside workspace"
         if not target.exists():
