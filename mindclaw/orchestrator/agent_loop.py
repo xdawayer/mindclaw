@@ -1,4 +1,5 @@
-# input: bus/queue.py, bus/events.py, llm/router.py, config/schema.py, tools/registry.py
+# input: bus/queue.py, bus/events.py, llm/router.py, config/schema.py,
+#        tools/registry.py, security/approval.py
 # output: 导出 AgentLoop
 # pos: 编排层核心，ReAct 推理循环 (含工具调用)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -11,6 +12,7 @@ from mindclaw.bus.events import InboundMessage, OutboundMessage
 from mindclaw.bus.queue import MessageBus
 from mindclaw.config.schema import MindClawConfig
 from mindclaw.llm.router import LLMRouter
+from mindclaw.security.approval import ApprovalManager
 from mindclaw.tools.base import RiskLevel
 from mindclaw.tools.registry import ToolRegistry
 
@@ -29,12 +31,16 @@ class AgentLoop:
         bus: MessageBus,
         router: LLMRouter,
         tool_registry: ToolRegistry | None = None,
+        approval_manager: ApprovalManager | None = None,
     ) -> None:
         self.config = config
         self.bus = bus
         self.router = router
         self.tool_registry = tool_registry or ToolRegistry()
+        self.approval_manager = approval_manager
         self._sessions: dict[str, list[dict]] = {}
+        self._current_channel: str = ""
+        self._current_chat_id: str = ""
 
     def _get_history(self, session_key: str) -> list[dict]:
         if session_key not in self._sessions:
@@ -62,8 +68,20 @@ class AgentLoop:
             if not self.config.tools.allow_dangerous_tools:
                 logger.warning(f"Blocked DANGEROUS tool '{name}' - not enabled")
                 return f"Error: tool '{name}' requires allowDangerousTools in config"
-            # TODO(Phase 3): implement user approval workflow per PRD
-            logger.warning(f"Executing DANGEROUS tool '{name}' without user approval")
+            if self.approval_manager is not None:
+                approved = await self.approval_manager.request_approval(
+                    tool_name=name,
+                    arguments=arguments,
+                    channel=self._current_channel,
+                    chat_id=self._current_chat_id,
+                )
+                if not approved:
+                    logger.warning(f"DANGEROUS tool '{name}' was not approved")
+                    return f"Error: tool '{name}' execution was not approved"
+            else:
+                logger.warning(
+                    f"Executing DANGEROUS tool '{name}' without approval manager"
+                )
         try:
             params = json.loads(arguments)
             result = await tool.execute(params)
@@ -86,6 +104,9 @@ class AgentLoop:
         tools = self.tool_registry.to_openai_tools() or None
 
         logger.info(f"Agent processing: session={session_key}, user={inbound.username}")
+
+        self._current_channel = inbound.channel
+        self._current_chat_id = inbound.chat_id
 
         iteration = 0
         while iteration < max_iterations:

@@ -1,4 +1,4 @@
-# input: mindclaw.orchestrator, mindclaw.tools
+# input: mindclaw.orchestrator, mindclaw.tools, mindclaw.security.approval
 # output: Agent Loop 工具集成测试
 # pos: 编排层工具调用集成测试
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -149,5 +149,93 @@ async def test_agent_loop_allows_dangerous_when_enabled():
 
     agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
 
+    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    assert result == "executed"
+
+
+@pytest.mark.asyncio
+async def test_dangerous_tool_triggers_approval_and_approved():
+    """DANGEROUS tool with approval_manager: approved -> execute."""
+    import asyncio
+
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+    from mindclaw.security.approval import ApprovalManager
+
+    config = MindClawConfig(tools={"allowDangerousTools": True})
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(FakeDangerousTool())
+    approval_manager = ApprovalManager(bus=bus, timeout=5.0)
+
+    agent = AgentLoop(
+        config=config,
+        bus=bus,
+        router=router,
+        tool_registry=registry,
+        approval_manager=approval_manager,
+    )
+    # Set context (normally set by handle_message)
+    agent._current_channel = "cli"
+    agent._current_chat_id = "local"
+
+    async def grant():
+        await asyncio.sleep(0.05)
+        await bus.get_outbound()  # approval request message
+        approval_manager.resolve("yes")
+
+    asyncio.create_task(grant())
+    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    assert result == "executed"
+
+
+@pytest.mark.asyncio
+async def test_dangerous_tool_triggers_approval_and_rejected():
+    """DANGEROUS tool with approval_manager: rejected -> error."""
+    import asyncio
+
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+    from mindclaw.security.approval import ApprovalManager
+
+    config = MindClawConfig(tools={"allowDangerousTools": True})
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(FakeDangerousTool())
+    approval_manager = ApprovalManager(bus=bus, timeout=5.0)
+
+    agent = AgentLoop(
+        config=config,
+        bus=bus,
+        router=router,
+        tool_registry=registry,
+        approval_manager=approval_manager,
+    )
+    agent._current_channel = "cli"
+    agent._current_chat_id = "local"
+
+    async def reject():
+        await asyncio.sleep(0.05)
+        await bus.get_outbound()
+        approval_manager.resolve("no")
+
+    asyncio.create_task(reject())
+    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    assert "not approved" in result.lower() or "rejected" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_dangerous_tool_no_approval_manager_still_works():
+    """DANGEROUS tool without approval_manager: backward compatible."""
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+
+    config = MindClawConfig(tools={"allowDangerousTools": True})
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(FakeDangerousTool())
+
+    # No approval_manager passed
+    agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
     result = await agent._execute_tool("exec", '{"command": "ls"}')
     assert result == "executed"
