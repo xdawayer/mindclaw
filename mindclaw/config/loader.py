@@ -39,6 +39,10 @@ def load_config(path: Path | None = None) -> MindClawConfig:
         logger.info(f"Config file {path} not found, using defaults")
         return MindClawConfig()
 
-    raw = json.loads(path.read_text())
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in config file {path}: {e}")
+        raise SystemExit(1) from e
     resolved = resolve_env_vars(raw)
     return MindClawConfig(**resolved)

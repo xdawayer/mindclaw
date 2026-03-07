@@ -16,7 +16,7 @@ class AgentConfig(BaseModel):
 
 
 class GatewayConfig(BaseModel):
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8765
 
     model_config = {"populate_by_name": True}
@@ -33,6 +33,7 @@ class ToolsConfig(BaseModel):
     exec_timeout: int = Field(default=30, alias="execTimeout")
     tool_result_max_chars: int = Field(default=500, alias="toolResultMaxChars")
     restrict_to_workspace: bool = Field(default=True, alias="restrictToWorkspace")
+    allow_dangerous_tools: bool = Field(default=False, alias="allowDangerousTools")
 
     model_config = {"populate_by_name": True}
 

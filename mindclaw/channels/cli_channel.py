@@ -21,6 +21,7 @@ class CLIChannel(BaseChannel):
     def __init__(self, bus: MessageBus) -> None:
         super().__init__(bus)
         self._running = False
+        self._stop_event: asyncio.Event | None = None
 
     async def _handle_input(self, text: str) -> None:
         msg = InboundMessage(
@@ -46,26 +47,36 @@ class CLIChannel(BaseChannel):
                         continue
                     if text.lower() in ("exit", "quit", "/quit"):
                         self._running = False
+                        self._stop_event.set()
                         break
                     await self._handle_input(text)
                 except (EOFError, KeyboardInterrupt):
                     self._running = False
+                    self._stop_event.set()
                     break
 
     async def _output_loop(self) -> None:
-        while self._running:
-            try:
-                msg = await asyncio.wait_for(self.bus.get_outbound(), timeout=0.5)
+        while not self._stop_event.is_set():
+            get_task = asyncio.ensure_future(self.bus.get_outbound())
+            stop_task = asyncio.ensure_future(self._stop_event.wait())
+            done, pending = await asyncio.wait(
+                {get_task, stop_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in pending:
+                task.cancel()
+            if get_task in done:
+                msg = get_task.result()
                 console.print()
                 console.print(Markdown(msg.text))
                 console.print()
-            except asyncio.TimeoutError:
-                continue
 
     async def start(self) -> None:
         self._running = True
+        self._stop_event = asyncio.Event()
         console.print("[bold green]MindClaw[/] ready. Type 'exit' to quit.\n")
         await asyncio.gather(self._input_loop(), self._output_loop())
 
     async def stop(self) -> None:
         self._running = False
+        if self._stop_event:
+            self._stop_event.set()

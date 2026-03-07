@@ -63,13 +63,15 @@ async def _run_chat(config_path: Path | None) -> None:
             msg = await bus.get_inbound()
             try:
                 await agent.handle_message(msg)
-            except Exception as e:
-                logger.error(f"Agent error: {e}")
+            except Exception:
+                logger.exception("Agent error")
                 from mindclaw.bus.events import OutboundMessage
 
                 await bus.put_outbound(
                     OutboundMessage(
-                        channel=msg.channel, chat_id=msg.chat_id, text=f"Error: {e}"
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
+                        text="An internal error occurred. Please try again.",
                     )
                 )
 

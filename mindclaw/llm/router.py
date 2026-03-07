@@ -6,10 +6,21 @@
 from dataclasses import dataclass
 from typing import Any
 
+import litellm
 from litellm import acompletion
 from loguru import logger
 
 from mindclaw.config.schema import MindClawConfig
+
+litellm.suppress_debug_info = True
+
+_MODEL_PROVIDER_MAP = {
+    "claude": "anthropic",
+    "gpt": "openai",
+    "o1": "openai",
+    "o3": "openai",
+    "o4": "openai",
+}
 
 
 @dataclass
@@ -29,6 +40,9 @@ class LLMRouter:
         """Extract provider from model string (e.g. 'anthropic/claude-...')."""
         if "/" in model:
             return model.split("/", 1)[0]
+        for prefix, provider in _MODEL_PROVIDER_MAP.items():
+            if model.startswith(prefix):
+                return provider
         return None
 
     async def chat(
@@ -55,6 +69,7 @@ class LLMRouter:
             if settings.api_base:
                 kwargs["api_base"] = settings.api_base
 
+        kwargs["timeout"] = 120
         response = await acompletion(**kwargs)
         message = response.choices[0].message
 

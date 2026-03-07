@@ -1,11 +1,27 @@
-# input: tools/base.py, pathlib
+# input: tools/base.py, pathlib, os, tempfile
 # output: 导出 ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
-# pos: 文件操作工具集，带路径沙箱保护
+# pos: 文件操作工具集，带路径沙箱保护和原子写入
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
+import os
+import tempfile
 from pathlib import Path
 
 from .base import RiskLevel, Tool
+
+
+def _atomic_write(target: Path, content: str) -> None:
+    """Write content atomically via temp file + os.replace."""
+    fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, str(target))
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
 
 
 def _safe_resolve(workspace: Path, relative_path: str) -> Path | None:
@@ -73,7 +89,7 @@ class WriteFileTool(Tool):
             return "Error: path denied - outside workspace"
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(params["content"], encoding="utf-8")
+            _atomic_write(target, params["content"])
             return f"Successfully written to {params['path']}"
         except Exception as e:
             return f"Error writing file: {e}"
@@ -110,7 +126,7 @@ class EditFileTool(Tool):
             if params["old_text"] not in content:
                 return f"Error: old_text not found in {params['path']}"
             new_content = content.replace(params["old_text"], params["new_text"], 1)
-            target.write_text(new_content, encoding="utf-8")
+            _atomic_write(target, new_content)
             return f"Successfully edited {params['path']}"
         except Exception as e:
             return f"Error editing file: {e}"

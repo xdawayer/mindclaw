@@ -19,6 +19,8 @@ You are MindClaw, a personal AI assistant. You are helpful, concise, and accurat
 Respond in the same language as the user's message.
 """
 
+MAX_HISTORY_MESSAGES = 100
+
 
 class AgentLoop:
     def __init__(
@@ -37,6 +39,9 @@ class AgentLoop:
     def _get_history(self, session_key: str) -> list[dict]:
         if session_key not in self._sessions:
             self._sessions[session_key] = []
+        history = self._sessions[session_key]
+        if len(history) > MAX_HISTORY_MESSAGES:
+            self._sessions[session_key] = history[-MAX_HISTORY_MESSAGES:]
         return self._sessions[session_key]
 
     def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
@@ -50,6 +55,9 @@ class AgentLoop:
         if tool is None:
             return f"Error: unknown tool '{name}'"
         if tool.risk_level == RiskLevel.DANGEROUS:
+            if not self.config.tools.allow_dangerous_tools:
+                logger.warning(f"Blocked DANGEROUS tool '{name}' - not enabled")
+                return f"Error: tool '{name}' requires allowDangerousTools in config"
             logger.warning(f"Executing DANGEROUS tool '{name}' without user approval")
         try:
             params = json.loads(arguments)
@@ -66,7 +74,8 @@ class AgentLoop:
     async def handle_message(self, inbound: InboundMessage) -> None:
         session_key = inbound.session_key
         history = self._get_history(session_key)
-        max_iterations = self.config.agent.max_iterations
+        initial_history_len = len(history)
+        max_iterations = max(1, self.config.agent.max_iterations)
 
         messages = self._build_messages(history, inbound.text)
         tools = self.tool_registry.to_openai_tools() or None
@@ -105,7 +114,9 @@ class AgentLoop:
                 "and couldn't complete the task."
             )
 
-        history.append({"role": "user", "content": inbound.text})
+        # Store full message chain (skip system prompt + existing history)
+        for msg in messages[1 + initial_history_len:]:
+            history.append(msg)
         history.append({"role": "assistant", "content": reply_text})
 
         outbound = OutboundMessage(

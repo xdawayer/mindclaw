@@ -30,6 +30,20 @@ class FakeReadTool(Tool):
         return "file content: hello world"
 
 
+class FakeDangerousTool(Tool):
+    name = "exec"
+    description = "Execute command"
+    parameters = {
+        "type": "object",
+        "properties": {"command": {"type": "string"}},
+        "required": ["command"],
+    }
+    risk_level = RiskLevel.DANGEROUS
+
+    async def execute(self, params: dict) -> str:
+        return "executed"
+
+
 @pytest.mark.asyncio
 async def test_agent_loop_with_tool_call():
     """Agent 应执行工具调用并将结果返回 LLM"""
@@ -103,3 +117,37 @@ async def test_agent_loop_max_iterations():
 
     outbound = await bus.get_outbound()
     assert "max iterations" in outbound.text.lower() or "iteration" in outbound.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_blocks_dangerous_tools():
+    """DANGEROUS 工具在未启用时应被拒绝"""
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+
+    config = MindClawConfig()  # allow_dangerous_tools defaults to False
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(FakeDangerousTool())
+
+    agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
+
+    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    assert "requires" in result.lower() or "error" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_allows_dangerous_when_enabled():
+    """DANGEROUS 工具在启用后应正常执行"""
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+
+    config = MindClawConfig(tools={"allowDangerousTools": True})
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(FakeDangerousTool())
+
+    agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
+
+    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    assert result == "executed"

@@ -14,6 +14,8 @@ def test_config_schema_defaults():
     assert config.agent.default_model == "claude-sonnet-4-20250514"
     assert config.agent.max_iterations == 40
     assert config.agent.subagent_max_iterations == 15
+    assert config.tools.allow_dangerous_tools is False
+    assert config.gateway.host == "127.0.0.1"
 
 
 def test_config_schema_custom_values():

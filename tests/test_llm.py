@@ -99,3 +99,15 @@ async def test_llm_router_injects_provider_credentials():
 
     assert captured_kwargs["api_key"] == "sk-test-123"
     assert captured_kwargs["api_base"] == "https://custom.api"
+
+
+def test_llm_router_provider_prefix_mapping():
+    """模型名不含 / 时应通过前缀映射找到 provider"""
+    from mindclaw.config.schema import MindClawConfig
+    from mindclaw.llm.router import LLMRouter
+
+    router = LLMRouter(MindClawConfig())
+    assert router._extract_provider("claude-sonnet-4-20250514") == "anthropic"
+    assert router._extract_provider("gpt-4o") == "openai"
+    assert router._extract_provider("anthropic/claude-3") == "anthropic"
+    assert router._extract_provider("unknown-model") is None

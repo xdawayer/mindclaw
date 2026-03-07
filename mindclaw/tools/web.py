@@ -1,14 +1,37 @@
-# input: tools/base.py, httpx
+# input: tools/base.py, httpx, ipaddress, socket
 # output: 导出 WebSearchTool, WebFetchTool
-# pos: 网页搜索和抓取工具
+# pos: 网页搜索和抓取工具，含 SSRF 防护
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
+import ipaddress
 import re
+import socket
+from urllib.parse import urlparse
 
 import httpx
 from loguru import logger
 
 from .base import RiskLevel, Tool
+
+MAX_RESPONSE_BYTES = 2_000_000
+
+
+def _is_safe_url(url: str) -> bool:
+    """Reject URLs targeting private/loopback/link-local/metadata addresses."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        for _, _, _, _, sockaddr in socket.getaddrinfo(hostname, None):
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False
+        return True
+    except (socket.gaierror, ValueError, OSError):
+        return False
 
 
 def _html_to_text(html: str) -> str:
@@ -27,24 +50,32 @@ class WebFetchTool(Tool):
         "properties": {"url": {"type": "string", "description": "URL to fetch"}},
         "required": ["url"],
     }
-    risk_level = RiskLevel.SAFE
+    risk_level = RiskLevel.MODERATE
 
     def __init__(self, max_chars: int = 5000) -> None:
         self.max_chars = max_chars
 
     async def execute(self, params: dict) -> str:
         url = params["url"]
+        if not _is_safe_url(url):
+            return "Error: URL targets a private/internal address"
         logger.info(f"Fetching: {url}")
         try:
             async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
-                resp = await client.get(url)
-            if resp.status_code != 200:
-                return f"Error: HTTP {resp.status_code}"
+                async with client.stream("GET", url) as resp:
+                    if resp.status_code != 200:
+                        return f"Error: HTTP {resp.status_code}"
+                    body = b""
+                    async for chunk in resp.aiter_bytes():
+                        body += chunk
+                        if len(body) > MAX_RESPONSE_BYTES:
+                            break
             content_type = resp.headers.get("content-type", "")
+            text_content = body.decode("utf-8", errors="replace")
             if "text/html" in content_type:
-                text = _html_to_text(resp.text)
+                text = _html_to_text(text_content)
             else:
-                text = resp.text
+                text = text_content
             if len(text) > self.max_chars:
                 text = text[: self.max_chars] + "\n...(truncated)"
             return text
