@@ -6,3 +6,4 @@
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
 | `sandbox.py` | 核心 | 命令黑名单 (is_command_denied) + 路径沙箱验证 (validate_path) |
+| `approval.py` | 核心 | 审批工作流 (`ApprovalManager`)，DANGEROUS 工具执行前的用户确认机制 |
