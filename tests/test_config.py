@@ -65,3 +65,23 @@ def test_config_load_default_when_no_file():
 
     config = load_config(Path("/nonexistent/config.json"))
     assert config.agent.default_model == "claude-sonnet-4-20250514"
+
+
+def test_security_config_defaults():
+    """SecurityConfig 默认值应正确"""
+    from mindclaw.config.schema import MindClawConfig
+
+    config = MindClawConfig()
+    assert config.security.approval_timeout == 300
+    assert config.security.session_poisoning_protection is True
+
+
+def test_security_config_from_dict():
+    """SecurityConfig 应支持从 camelCase 字典创建"""
+    from mindclaw.config.schema import MindClawConfig
+
+    config = MindClawConfig(**{
+        "security": {"approvalTimeout": 60, "sessionPoisoningProtection": False}
+    })
+    assert config.security.approval_timeout == 60
+    assert config.security.session_poisoning_protection is False
