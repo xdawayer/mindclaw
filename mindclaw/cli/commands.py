@@ -81,6 +81,10 @@ async def _run_chat(config_path: Path | None) -> None:
         await channel.start()
     finally:
         agent_task.cancel()
+        try:
+            await agent_task
+        except asyncio.CancelledError:
+            pass
         await channel.stop()
 
 

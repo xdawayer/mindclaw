@@ -6,7 +6,7 @@
 import ipaddress
 import re
 import socket
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from loguru import logger
@@ -14,10 +14,16 @@ from loguru import logger
 from .base import RiskLevel, Tool
 
 MAX_RESPONSE_BYTES = 2_000_000
+MAX_REDIRECTS = 5
+_REDIRECT_CODES = frozenset({301, 302, 303, 307, 308})
 
 
 def _is_safe_url(url: str) -> bool:
-    """Reject URLs targeting private/loopback/link-local/metadata addresses."""
+    """Reject URLs targeting private/loopback/link-local/metadata addresses.
+
+    Note: DNS rebinding can bypass this check if the attacker controls DNS.
+    Callers should re-validate at each redirect hop to reduce the window.
+    """
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
@@ -61,17 +67,31 @@ class WebFetchTool(Tool):
             return "Error: URL targets a private/internal address"
         logger.info(f"Fetching: {url}")
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
-                async with client.stream("GET", url) as resp:
-                    if resp.status_code != 200:
-                        return f"Error: HTTP {resp.status_code}"
-                    body = b""
-                    async for chunk in resp.aiter_bytes():
-                        body += chunk
-                        if len(body) > MAX_RESPONSE_BYTES:
-                            break
-            content_type = resp.headers.get("content-type", "")
-            text_content = body.decode("utf-8", errors="replace")
+            async with httpx.AsyncClient(follow_redirects=False, timeout=15.0) as client:
+                current_url = url
+                content_type = ""
+                body = bytearray()
+                for _ in range(MAX_REDIRECTS):
+                    async with client.stream("GET", current_url) as resp:
+                        if resp.status_code in _REDIRECT_CODES:
+                            location = resp.headers.get("location")
+                            if not location:
+                                return "Error: redirect with no Location header"
+                            current_url = urljoin(current_url, location)
+                            if not _is_safe_url(current_url):
+                                return "Error: redirect targets a private/internal address"
+                            continue
+                        if resp.status_code != 200:
+                            return f"Error: HTTP {resp.status_code}"
+                        content_type = resp.headers.get("content-type", "")
+                        async for chunk in resp.aiter_bytes():
+                            body.extend(chunk)
+                            if len(body) > MAX_RESPONSE_BYTES:
+                                break
+                    break
+                else:
+                    return "Error: too many redirects"
+            text_content = bytes(body).decode("utf-8", errors="replace")
             if "text/html" in content_type:
                 text = _html_to_text(text_content)
             else:

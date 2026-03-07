@@ -13,6 +13,7 @@ from loguru import logger
 
 from .base import RiskLevel, Tool
 
+# Best-effort heuristic blocklist; real security boundary is the DANGEROUS risk level gate
 DENY_PATTERNS = [
     r"rm\s+-rf\s+/",
     r"dd\s+if=",

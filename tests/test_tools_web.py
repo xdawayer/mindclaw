@@ -93,6 +93,38 @@ async def test_web_fetch_rejects_private_url():
 
 
 @pytest.mark.asyncio
+async def test_web_fetch_blocks_redirect_to_private():
+    """SSRF: redirect to internal address should be blocked."""
+    from mindclaw.tools.web import WebFetchTool
+
+    tool = WebFetchTool()
+
+    mock_redirect_resp = MagicMock()
+    mock_redirect_resp.status_code = 302
+    mock_redirect_resp.headers = {"location": "http://169.254.169.254/metadata"}
+
+    @asynccontextmanager
+    async def fake_stream(method, url):
+        yield mock_redirect_resp
+
+    def fake_is_safe(url):
+        return "169.254" not in url
+
+    with (
+        patch("mindclaw.tools.web._is_safe_url", side_effect=fake_is_safe),
+        patch("httpx.AsyncClient") as mock_client_cls,
+    ):
+        mock_client = AsyncMock()
+        mock_client.stream = fake_stream
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+        result = await tool.execute({"url": "https://attacker.com/redirect"})
+
+    assert "private" in result.lower() or "internal" in result.lower()
+
+
+@pytest.mark.asyncio
 async def test_web_search_returns_results():
     from mindclaw.tools.web import WebSearchTool
 

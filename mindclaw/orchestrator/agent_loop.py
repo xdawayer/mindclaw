@@ -41,7 +41,11 @@ class AgentLoop:
             self._sessions[session_key] = []
         history = self._sessions[session_key]
         if len(history) > MAX_HISTORY_MESSAGES:
-            self._sessions[session_key] = history[-MAX_HISTORY_MESSAGES:]
+            trimmed = history[-MAX_HISTORY_MESSAGES:]
+            # Skip to first 'user' message to avoid orphaned tool/assistant messages
+            while trimmed and trimmed[0].get("role") != "user":
+                trimmed.pop(0)
+            self._sessions[session_key] = trimmed
         return self._sessions[session_key]
 
     def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
@@ -58,6 +62,7 @@ class AgentLoop:
             if not self.config.tools.allow_dangerous_tools:
                 logger.warning(f"Blocked DANGEROUS tool '{name}' - not enabled")
                 return f"Error: tool '{name}' requires allowDangerousTools in config"
+            # TODO(Phase 3): implement user approval workflow per PRD
             logger.warning(f"Executing DANGEROUS tool '{name}' without user approval")
         try:
             params = json.loads(arguments)

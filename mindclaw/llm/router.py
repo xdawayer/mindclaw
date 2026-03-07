@@ -37,7 +37,11 @@ class LLMRouter:
         return model or self.config.agent.default_model
 
     def _extract_provider(self, model: str) -> str | None:
-        """Extract provider from model string (e.g. 'anthropic/claude-...')."""
+        """Extract provider from model string.
+
+        Prefer explicit 'provider/model' format (e.g. 'anthropic/claude-3').
+        Prefix matching is a convenience fallback and may match unintended models.
+        """
         if "/" in model:
             return model.split("/", 1)[0]
         for prefix, provider in _MODEL_PROVIDER_MAP.items():

@@ -92,3 +92,27 @@ async def test_edit_file(workspace):
     })
     assert "success" in result.lower() or "edited" in result.lower()
     assert (workspace / "test.txt").read_text() == "hello mindclaw"
+
+
+@pytest.mark.asyncio
+async def test_edit_file_preserves_permissions(workspace):
+    """Atomic write should preserve existing file permissions."""
+    import os
+    import stat
+
+    from mindclaw.tools.file_ops import EditFileTool
+
+    script = workspace / "run.sh"
+    script.write_text("#!/bin/sh\necho hello")
+    os.chmod(script, 0o755)
+
+    tool = EditFileTool(workspace=workspace)
+    await tool.execute({
+        "path": "run.sh",
+        "old_text": "echo hello",
+        "new_text": "echo world",
+    })
+
+    mode = stat.S_IMODE(script.stat().st_mode)
+    assert mode & 0o111, f"Execute bit lost: {oct(mode)}"
+    assert script.read_text() == "#!/bin/sh\necho world"

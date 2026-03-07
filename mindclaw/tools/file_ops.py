@@ -12,8 +12,11 @@ from .base import RiskLevel, Tool
 
 def _atomic_write(target: Path, content: str) -> None:
     """Write content atomically via temp file + os.replace."""
+    existing_mode = target.stat().st_mode if target.exists() else None
     fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), suffix=".tmp")
     try:
+        if existing_mode is not None:
+            os.fchmod(fd, existing_mode)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)
             f.flush()
