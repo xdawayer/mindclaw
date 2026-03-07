@@ -63,7 +63,7 @@ mindclaw/
 
 ## Development Phases
 
-当前进度：Phase 0 (环境搭建)
+当前进度：Phase 3 (安全层) — Phase 0-2 已完成
 
 | Phase | 内容 | 里程碑 |
 |-------|------|--------|

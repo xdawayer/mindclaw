@@ -5,4 +5,4 @@ CLI 入口层 - Typer 命令定义。
 | 文件 | 地位 | 功能 |
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
-| `commands.py` | 核心 | Typer app 命令 (chat, version) |
+| `commands.py` | 核心 | Typer app 命令 (chat, version)，chat 命令集成审批管理器 + 消息路由器 |
