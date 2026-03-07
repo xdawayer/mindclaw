@@ -41,11 +41,11 @@ class AgentLoop:
             self._sessions[session_key] = []
         history = self._sessions[session_key]
         if len(history) > MAX_HISTORY_MESSAGES:
-            trimmed = history[-MAX_HISTORY_MESSAGES:]
-            # Skip to first 'user' message to avoid orphaned tool/assistant messages
-            while trimmed and trimmed[0].get("role") != "user":
-                trimmed.pop(0)
-            self._sessions[session_key] = trimmed
+            cutoff = max(0, len(history) - MAX_HISTORY_MESSAGES)
+            # Walk back to a 'user' message boundary to avoid orphaned tool/assistant messages
+            while cutoff > 0 and history[cutoff].get("role") != "user":
+                cutoff -= 1
+            self._sessions[session_key] = history[cutoff:]
         return self._sessions[session_key]
 
     def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:

@@ -67,7 +67,9 @@ class WebFetchTool(Tool):
             return "Error: URL targets a private/internal address"
         logger.info(f"Fetching: {url}")
         try:
-            async with httpx.AsyncClient(follow_redirects=False, timeout=15.0) as client:
+            async with httpx.AsyncClient(
+                follow_redirects=False, timeout=15.0, trust_env=False,
+            ) as client:
                 current_url = url
                 content_type = ""
                 body = bytearray()
@@ -91,7 +93,10 @@ class WebFetchTool(Tool):
                     break
                 else:
                     return "Error: too many redirects"
-            text_content = bytes(body).decode("utf-8", errors="replace")
+            charset = "utf-8"
+            if "charset=" in content_type:
+                charset = content_type.split("charset=")[-1].split(";")[0].strip()
+            text_content = bytes(body).decode(charset, errors="replace")
             if "text/html" in content_type:
                 text = _html_to_text(text_content)
             else:
