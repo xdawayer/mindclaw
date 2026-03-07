@@ -96,6 +96,8 @@ class AgentLoop:
 
     async def handle_message(self, inbound: InboundMessage) -> None:
         session_key = inbound.session_key
+        self._current_channel = inbound.channel
+        self._current_chat_id = inbound.chat_id
         history = self._get_history(session_key)
         initial_history_len = len(history)
         max_iterations = max(1, self.config.agent.max_iterations)
@@ -105,40 +107,42 @@ class AgentLoop:
 
         logger.info(f"Agent processing: session={session_key}, user={inbound.username}")
 
-        self._current_channel = inbound.channel
-        self._current_chat_id = inbound.chat_id
+        try:
+            iteration = 0
+            while iteration < max_iterations:
+                iteration += 1
+                result = await self.router.chat(messages=messages, tools=tools)
 
-        iteration = 0
-        while iteration < max_iterations:
-            iteration += 1
-            result = await self.router.chat(messages=messages, tools=tools)
+                if not result.tool_calls:
+                    reply_text = result.content or "(no response)"
+                    break
 
-            if not result.tool_calls:
-                reply_text = result.content or "(no response)"
-                break
+                assistant_msg = {"role": "assistant", "content": result.content, "tool_calls": []}
+                for tc in result.tool_calls:
+                    assistant_msg["tool_calls"].append({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    })
+                messages.append(assistant_msg)
 
-            assistant_msg = {"role": "assistant", "content": result.content, "tool_calls": []}
-            for tc in result.tool_calls:
-                assistant_msg["tool_calls"].append({
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                })
-            messages.append(assistant_msg)
-
-            for tc in result.tool_calls:
-                logger.info(f"Tool call: {tc.function.name}")
-                tool_result = await self._execute_tool(tc.function.name, tc.function.arguments)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": tool_result,
-                })
-        else:
-            reply_text = (
-                f"I reached the max iterations ({max_iterations}) "
-                "and couldn't complete the task."
-            )
+                for tc in result.tool_calls:
+                    logger.info(f"Tool call: {tc.function.name}")
+                    tool_result = await self._execute_tool(tc.function.name, tc.function.arguments)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": tool_result,
+                    })
+            else:
+                reply_text = (
+                    f"I reached the max iterations ({max_iterations}) "
+                    "and couldn't complete the task."
+                )
+        except Exception:
+            # Session poisoning protection: rollback history on error
+            del history[initial_history_len:]
+            raise
 
         # Store full message chain (skip system prompt + existing history)
         for msg in messages[1 + initial_history_len:]:

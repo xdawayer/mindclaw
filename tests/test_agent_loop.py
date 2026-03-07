@@ -73,3 +73,61 @@ async def test_agent_loop_builds_system_prompt():
     # 最后一条应该是 user message
     assert captured_messages[-1]["role"] == "user"
     assert captured_messages[-1]["content"] == "hi"
+
+
+@pytest.mark.asyncio
+async def test_session_history_rolls_back_on_error():
+    """Error during processing should not pollute session history."""
+    from mindclaw.bus.queue import MessageBus
+    from mindclaw.llm.router import LLMRouter
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+
+    config = MindClawConfig()
+    bus = MessageBus()
+    router = LLMRouter(config)
+    agent = AgentLoop(config=config, bus=bus, router=router)
+
+    inbound = InboundMessage(
+        channel="cli", chat_id="local",
+        user_id="wzb", username="wzb", text="trigger error",
+    )
+
+    async def exploding_chat(messages, **kwargs):
+        raise RuntimeError("LLM exploded")
+
+    with patch.object(router, "chat", side_effect=exploding_chat):
+        with pytest.raises(RuntimeError, match="LLM exploded"):
+            await agent.handle_message(inbound)
+
+    # Session history should be empty (rolled back)
+    history = agent._get_history("cli:local")
+    assert len(history) == 0
+
+
+@pytest.mark.asyncio
+async def test_session_history_preserved_on_success():
+    """Successful processing should persist to history."""
+    from mindclaw.bus.queue import MessageBus
+    from mindclaw.llm.router import LLMRouter
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+
+    config = MindClawConfig()
+    bus = MessageBus()
+    router = LLMRouter(config)
+    agent = AgentLoop(config=config, bus=bus, router=router)
+
+    inbound = InboundMessage(
+        channel="cli", chat_id="local",
+        user_id="wzb", username="wzb", text="hello",
+    )
+
+    mock_result = ChatResult(content="Hi there!", tool_calls=None)
+    with patch.object(router, "chat", return_value=mock_result):
+        await agent.handle_message(inbound)
+
+    await bus.get_outbound()
+    history = agent._get_history("cli:local")
+    # Should have: user message + assistant reply
+    assert len(history) == 2
+    assert history[0]["role"] == "user"
+    assert history[1]["role"] == "assistant"
