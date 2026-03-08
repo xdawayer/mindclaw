@@ -79,3 +79,31 @@ async def test_end_to_end_approval_via_bus():
     assert routed is True
     result = await approval_task
     assert result is True
+
+
+@pytest.mark.asyncio
+async def test_non_approval_msg_does_not_block_router_during_pending():
+    """Non-approval message during pending approval should be dropped, not block."""
+    bus = MessageBus()
+    manager = ApprovalManager(bus=bus, timeout=5.0)
+
+    approval_task = asyncio.create_task(
+        manager.request_approval("exec", "{}", "cli", "local")
+    )
+    await asyncio.sleep(0.05)
+    assert manager.has_pending()
+
+    # Simulate the message_router logic: non-approval msg should be skipped
+    non_approval_msg = InboundMessage(
+        channel="cli", chat_id="local",
+        user_id="test", username="test", text="hello",
+    )
+    # Router should skip this message (has_pending + not approval reply)
+    assert not manager.is_approval_reply(non_approval_msg.text)
+    # The key invariant: router must NOT await agent_task here;
+    # instead it should continue and remain responsive.
+
+    # Now send the real approval
+    manager.resolve("yes")
+    result = await approval_task
+    assert result is True

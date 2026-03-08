@@ -100,6 +100,15 @@ async def _run_chat(config_path: Path | None) -> None:
                 approval_manager.resolve(msg.text)
                 continue
 
+            # During pending approval, drop non-approval messages to avoid
+            # blocking the router (which would deadlock the approval flow).
+            if approval_manager.has_pending():
+                logger.debug(
+                    f"Ignoring non-approval message during pending approval: "
+                    f"{msg.text[:50]}"
+                )
+                continue
+
             # Wait for previous agent processing to finish
             if agent_task is not None and not agent_task.done():
                 try:
