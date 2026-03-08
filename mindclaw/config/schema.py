@@ -1,6 +1,6 @@
 # input: pydantic
 # output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ProviderSettings,
-#         ToolsConfig, LogConfig, SecurityConfig
+#         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig
 # pos: 配置层核心，定义所有配置的 Pydantic 模型
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
@@ -57,6 +57,14 @@ class SecurityConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class KnowledgeConfig(BaseModel):
+    data_dir: str = Field(default="data", alias="dataDir")
+    consolidation_threshold: int = Field(default=20, alias="consolidationThreshold")
+    consolidation_keep_recent: int = Field(default=10, alias="consolidationKeepRecent")
+
+    model_config = {"populate_by_name": True}
+
+
 class MindClawConfig(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
@@ -64,5 +72,6 @@ class MindClawConfig(BaseModel):
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     log: LogConfig = Field(default_factory=LogConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
+    knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
 
     model_config = {"populate_by_name": True}

@@ -85,3 +85,20 @@ def test_security_config_from_dict():
     })
     assert config.security.approval_timeout == 60
     assert config.security.session_poisoning_protection is False
+
+
+def test_knowledge_config_defaults():
+    from mindclaw.config.schema import KnowledgeConfig
+
+    kc = KnowledgeConfig()
+    assert kc.data_dir == "data"
+    assert kc.consolidation_threshold == 20
+    assert kc.consolidation_keep_recent == 10
+
+
+def test_mindclaw_config_has_knowledge():
+    from mindclaw.config.schema import MindClawConfig
+
+    config = MindClawConfig()
+    assert hasattr(config, "knowledge")
+    assert config.knowledge.data_dir == "data"
