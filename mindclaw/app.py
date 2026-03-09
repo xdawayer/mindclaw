@@ -1,6 +1,6 @@
 # input: config/schema.py, bus/queue.py, channels/manager.py, orchestrator/agent_loop.py,
-#        security/approval.py, knowledge/session.py, knowledge/memory.py,
-#        orchestrator/context.py, llm/router.py, tools/*, gateway/*
+#        orchestrator/subagent.py, security/approval.py, knowledge/session.py,
+#        knowledge/memory.py, orchestrator/context.py, llm/router.py, tools/*, gateway/*
 # output: 导出 MindClawApp
 # pos: 顶层编排器，统一管理所有组件的生命周期和消息路由
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -21,10 +21,13 @@ from mindclaw.knowledge.session import SessionStore
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.agent_loop import AgentLoop
 from mindclaw.orchestrator.context import ContextBuilder
+from mindclaw.orchestrator.subagent import SubAgentManager
 from mindclaw.security.approval import ApprovalManager
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from mindclaw.tools.message_user import MessageUserTool
 from mindclaw.tools.registry import ToolRegistry
 from mindclaw.tools.shell import ExecTool
+from mindclaw.tools.spawn_task import SpawnTaskTool
 from mindclaw.tools.web import WebFetchTool, WebSearchTool
 
 
@@ -51,6 +54,8 @@ class MindClawApp:
             bus=self.bus,
             timeout=config.security.approval_timeout,
         )
+
+        self.subagent_manager = SubAgentManager(config=config)
 
         self.agent_loop = AgentLoop(
             config=config,
@@ -82,6 +87,15 @@ class MindClawApp:
         brave_settings = self.config.providers.get("brave")
         if brave_settings and brave_settings.api_key:
             self.tool_registry.register(WebSearchTool(api_key=brave_settings.api_key))
+
+        self.tool_registry.register(MessageUserTool(
+            bus=self.bus,
+            context_provider=lambda: (
+                self.agent_loop._current_channel,
+                self.agent_loop._current_chat_id,
+            ),
+        ))
+        self.tool_registry.register(SpawnTaskTool(manager=self.subagent_manager))
 
     # ── Channel setup ─────────────────────────────────────────
 
