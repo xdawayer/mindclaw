@@ -20,3 +20,4 @@
 | `test_security_approval.py` | 单元测试 | 安全层审批工作流 (ApprovalManager 审批/拒绝/超时/生命周期) 测试 |
 | `test_message_routing.py` | 单元测试 | 消息路由测试 (审批回复路由到 ApprovalManager / 端到端审批流) |
 | `test_session_store.py` | 单元测试 | SessionStore JSONL 持久化和整合指针测试 |
+| `test_memory_manager.py` | 单元测试 | MemoryManager LLM 驱动记忆整合 (should_consolidate/load_memory/consolidate 流程) 测试 |

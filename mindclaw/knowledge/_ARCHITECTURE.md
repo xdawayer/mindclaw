@@ -6,3 +6,4 @@
 |------|------|------|
 | `__init__.py` | 包入口 | 空占位 |
 | `session.py` | 核心模块 | SessionStore — JSONL 持久化对话历史，管理整合指针 |
+| `memory.py` | 核心模块 | MemoryManager — LLM 驱动记忆整合，管理 MEMORY.md 和 HISTORY.md |
