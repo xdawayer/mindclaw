@@ -6,3 +6,4 @@
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
 | `agent_loop.py` | 核心 | AgentLoop 主推理循环 (ReAct)，含工具调用集成、危险工具拦截、审批工作流集成、历史消息裁剪和会话中毒保护 (错误时回滚历史) |
+| `context.py` | 核心 | ContextBuilder 动态构建系统提示，注入记忆 (MEMORY.md) 和当前日期 |

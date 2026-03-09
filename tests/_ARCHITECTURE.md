@@ -21,3 +21,4 @@
 | `test_message_routing.py` | 单元测试 | 消息路由测试 (审批回复路由到 ApprovalManager / 端到端审批流) |
 | `test_session_store.py` | 单元测试 | SessionStore JSONL 持久化和整合指针测试 |
 | `test_memory_manager.py` | 单元测试 | MemoryManager LLM 驱动记忆整合 (should_consolidate/load_memory/consolidate 流程) 测试 |
+| `test_context_builder.py` | 单元测试 | ContextBuilder 动态系统提示构建 (日期注入/记忆注入/无记忆场景) 测试 |
