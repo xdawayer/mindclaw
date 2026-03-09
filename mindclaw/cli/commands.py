@@ -1,4 +1,4 @@
-# input: typer, channels/, orchestrator/, llm/, config/, tools/*, security/approval
+# input: typer, channels/, orchestrator/, llm/, config/, tools/*, security/approval, knowledge/*
 # output: 导出 app (Typer 应用)
 # pos: CLI 入口，用户通过 typer 命令启动 MindClaw
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -13,8 +13,11 @@ from rich.console import Console
 from mindclaw.bus.queue import MessageBus
 from mindclaw.channels.cli_channel import CLIChannel
 from mindclaw.config.loader import load_config
+from mindclaw.knowledge.memory import MemoryManager
+from mindclaw.knowledge.session import SessionStore
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.agent_loop import AgentLoop
+from mindclaw.orchestrator.context import ContextBuilder
 from mindclaw.security.approval import ApprovalManager
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from mindclaw.tools.registry import ToolRegistry
@@ -55,6 +58,12 @@ async def _run_chat(config_path: Path | None) -> None:
     if brave_settings and brave_settings.api_key:
         registry.register(WebSearchTool(api_key=brave_settings.api_key))
 
+    # 创建知识层组件
+    data_dir = Path(config.knowledge.data_dir)
+    session_store = SessionStore(data_dir=data_dir)
+    memory_manager = MemoryManager(data_dir=data_dir, router=router, config=config)
+    context_builder = ContextBuilder(memory_manager=memory_manager)
+
     # 创建审批管理器
     approval_manager = ApprovalManager(
         bus=bus,
@@ -67,6 +76,9 @@ async def _run_chat(config_path: Path | None) -> None:
         router=router,
         tool_registry=registry,
         approval_manager=approval_manager,
+        session_store=session_store,
+        memory_manager=memory_manager,
+        context_builder=context_builder,
     )
 
     channel = CLIChannel(bus=bus)
