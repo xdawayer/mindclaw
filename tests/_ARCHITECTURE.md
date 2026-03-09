@@ -24,3 +24,4 @@
 | `test_memory_manager.py` | 单元测试 | MemoryManager LLM 驱动记忆整合 (should_consolidate/load_memory/consolidate 流程) 测试 |
 | `test_context_builder.py` | 单元测试 | ContextBuilder 动态系统提示构建 (日期注入/记忆注入/无记忆场景) 测试 |
 | `test_crypto.py` | 单元测试 | SecretStore 加密存储 (初始化/读写/删除/持久化/文件权限) 测试 |
+| `test_channel_manager.py` | 单元测试 | ChannelManager (注册/查找/启停生命周期/出站消息分发) 测试 |
