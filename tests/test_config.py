@@ -102,3 +102,56 @@ def test_mindclaw_config_has_knowledge():
     config = MindClawConfig()
     assert hasattr(config, "knowledge")
     assert config.knowledge.data_dir == "data"
+
+
+def test_channel_config_defaults():
+    from mindclaw.config.schema import ChannelConfig
+
+    cc = ChannelConfig()
+    assert cc.enabled is True
+    assert cc.token == ""
+    assert cc.allow_from == []
+    assert cc.allow_groups is False
+
+
+def test_channel_config_from_camel_case():
+    from mindclaw.config.schema import ChannelConfig
+
+    cc = ChannelConfig(**{"allowFrom": ["123"], "allowGroups": True, "token": "tok"})
+    assert cc.allow_from == ["123"]
+    assert cc.allow_groups is True
+    assert cc.token == "tok"
+
+
+def test_mindclaw_config_has_channels():
+    from mindclaw.config.schema import MindClawConfig
+
+    config = MindClawConfig()
+    assert config.channels == {}
+
+
+def test_mindclaw_config_channels_from_dict():
+    from mindclaw.config.schema import MindClawConfig
+
+    config = MindClawConfig(**{
+        "channels": {
+            "telegram": {"token": "bot123", "allowFrom": ["111"], "allowGroups": False}
+        }
+    })
+    assert "telegram" in config.channels
+    assert config.channels["telegram"].token == "bot123"
+    assert config.channels["telegram"].allow_from == ["111"]
+
+
+def test_gateway_config_has_token():
+    from mindclaw.config.schema import GatewayConfig
+
+    gc = GatewayConfig()
+    assert gc.token == ""
+
+
+def test_security_config_has_pairing_timeout():
+    from mindclaw.config.schema import SecurityConfig
+
+    sc = SecurityConfig()
+    assert sc.pairing_timeout == 300

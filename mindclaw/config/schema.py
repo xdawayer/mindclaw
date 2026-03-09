@@ -1,5 +1,5 @@
 # input: pydantic
-# output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ProviderSettings,
+# output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ChannelConfig, ProviderSettings,
 #         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig
 # pos: 配置层核心，定义所有配置的 Pydantic 模型
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -16,9 +16,19 @@ class AgentConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ChannelConfig(BaseModel):
+    enabled: bool = True
+    token: str = ""
+    allow_from: list[str] = Field(default_factory=list, alias="allowFrom")
+    allow_groups: bool = Field(default=False, alias="allowGroups")
+
+    model_config = {"populate_by_name": True}
+
+
 class GatewayConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8765
+    token: str = ""
 
     model_config = {"populate_by_name": True}
 
@@ -50,6 +60,7 @@ class LogConfig(BaseModel):
 
 class SecurityConfig(BaseModel):
     approval_timeout: int = Field(default=300, alias="approvalTimeout")
+    pairing_timeout: int = Field(default=300, alias="pairingTimeout")
     session_poisoning_protection: bool = Field(
         default=True, alias="sessionPoisoningProtection"
     )
@@ -68,6 +79,7 @@ class KnowledgeConfig(BaseModel):
 class MindClawConfig(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
+    channels: dict[str, ChannelConfig] = Field(default_factory=dict)
     providers: dict[str, ProviderSettings] = Field(default_factory=dict)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     log: LogConfig = Field(default_factory=LogConfig)
