@@ -5,3 +5,4 @@ WebSocket Gateway 层 - 远程渠道接入点 (Phase 5 实现)。
 | 文件 | 地位 | 功能 |
 |------|------|------|
 | `__init__.py` | 包入口 | 空占位 |
+| `auth.py` | 核心 | Gateway 认证层：Token 验证 (hmac) + 设备配对管理 (请求/审批/持久化) |
