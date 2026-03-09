@@ -1,6 +1,6 @@
 # input: websockets, asyncio, json, mindclaw.gateway.auth
 # output: 导出 GatewayServer
-# pos: WebSocket 服务器核心，JSON-RPC 2.0 协议处理认证与消息收发
+# pos: WebSocket 服务器核心，JSON-RPC 2.0 协议处理认证（含设备配对流程）与消息收发，ws 身份校验防串线
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from __future__ import annotations

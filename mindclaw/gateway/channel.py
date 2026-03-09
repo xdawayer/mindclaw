@@ -1,6 +1,6 @@
 # input: mindclaw.channels.base.BaseChannel, mindclaw.gateway.server.GatewayServer
 # output: 导出 GatewayChannel
-# pos: Gateway 渠道适配器，将 GatewayServer 接入 BaseChannel 体系
+# pos: Gateway 渠道适配器，将 GatewayServer 接入 BaseChannel 体系，定向发送无 broadcast 回退
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from __future__ import annotations
@@ -37,10 +37,11 @@ class GatewayChannel(BaseChannel):
         logger.info("GatewayChannel stopped")
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Send an outbound message to a specific device or broadcast.
+        """Send an outbound message to a specific device.
 
-        If msg.chat_id matches a connected device_id, send only to that device.
-        Otherwise broadcast to all authenticated clients.
+        If msg.chat_id matches a connected device_id, send to that device.
+        If the device is offline, the message is dropped with a warning.
+        Broadcast is only used when chat_id is empty (no targeted recipient).
         """
         payload = _jsonrpc_notification("reply", {"text": msg.text})
 
