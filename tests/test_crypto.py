@@ -3,7 +3,6 @@
 # pos: 安全层加密存储测试
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-import pytest
 
 
 def test_secret_store_init_creates_master_key(tmp_path):

@@ -23,7 +23,8 @@ from mindclaw.llm.router import LLMRouter
 _CONSOLIDATION_PROMPT = """\
 You are a memory manager for MindClaw, a personal AI assistant.
 
-Your task: Extract important information from the conversation below and merge it with existing memory.
+Your task: Extract important information from the conversation below
+and merge it with existing memory.
 
 ## Existing Memory
 {existing_memory}
@@ -33,7 +34,7 @@ Your task: Extract important information from the conversation below and merge i
 
 ## Instructions
 1. Extract facts worth remembering long-term: user preferences, key facts, important decisions.
-2. Merge with existing memory: keep what's still relevant, remove what's outdated, add new information.
+2. Merge with existing memory: keep what's still relevant, remove outdated, add new.
 3. Output the complete updated memory in this exact Markdown format:
 
 # MindClaw Memory

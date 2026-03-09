@@ -153,7 +153,8 @@ class GatewayServer:
         params = msg.get("params", {})
 
         if method != "auth":
-            await ws.send(_jsonrpc_error(ERR_INVALID_REQUEST, "First message must be 'auth'", msg_id))
+            err = _jsonrpc_error(ERR_INVALID_REQUEST, "First message must be 'auth'", msg_id)
+            await ws.send(err)
             return None
 
         token = params.get("token", "")
@@ -196,4 +197,5 @@ class GatewayServer:
                 await ws.send(_jsonrpc_result({"status": "ok"}, msg_id))
 
             else:
-                await ws.send(_jsonrpc_error(ERR_METHOD_NOT_FOUND, f"Unknown method: {method}", msg_id))
+                err = _jsonrpc_error(ERR_METHOD_NOT_FOUND, f"Unknown method: {method}", msg_id)
+                await ws.send(err)
