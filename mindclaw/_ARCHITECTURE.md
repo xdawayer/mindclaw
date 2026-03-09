@@ -5,6 +5,7 @@ MindClaw 主包入口，包含 6 层架构的所有子模块。
 | 文件/目录 | 地位 | 功能 |
 |-----------|------|------|
 | `__init__.py` | 包入口 | 导出 __version__ |
+| `app.py` | 顶层编排器 | MindClawApp：统一管理组件生命周期和消息路由 |
 | `cli/` | 用户接口层 | CLI 命令定义 (Typer) |
 | `gateway/` | 网关层 | WebSocket Gateway |
 | `channels/` | 渠道层 | 各平台渠道适配 |

@@ -26,4 +26,5 @@
 | `test_crypto.py` | 单元测试 | SecretStore 加密存储 (初始化/读写/删除/持久化/文件权限) 测试 |
 | `test_channel_manager.py` | 单元测试 | ChannelManager (注册/查找/启停生命周期/出站消息分发) 测试 |
 | `test_gateway_auth.py` | 单元测试 | GatewayAuthManager (Token 验证/设备配对请求审批超时/持久化/配对回复路由) 测试 |
+| `test_app.py` | 集成测试 | MindClawApp 编排器 (组件装配/工具注册/出站路由/消息路由分发) 测试 |
 | `test_gateway_server.py` | 集成测试 | GatewayServer + GatewayChannel (WebSocket 认证/消息收发/ping-pong/出站推送) 测试 |
