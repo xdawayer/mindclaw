@@ -100,7 +100,8 @@ class GatewayServer:
             await ws.send(data)
             return True
         except websockets.ConnectionClosed:
-            self._clients.pop(device_id, None)
+            if self._clients.get(device_id) is ws:
+                self._clients.pop(device_id, None)
             return False
 
     async def broadcast(self, data: str) -> None:
@@ -129,7 +130,7 @@ class GatewayServer:
         except websockets.ConnectionClosed:
             logger.debug(f"Client disconnected: {device_id or 'unknown'}")
         finally:
-            if device_id:
+            if device_id and self._clients.get(device_id) is ws:
                 self._clients.pop(device_id, None)
 
     async def _authenticate(self, ws: websockets.ServerConnection) -> str | None:
@@ -165,7 +166,21 @@ class GatewayServer:
             return None
 
         if not self._auth.is_paired(device_id):
-            await ws.send(_jsonrpc_result({"status": "pairing_required"}, msg_id))
+            device_name = params.get("device_name", device_id)
+
+            async def notify_pairing(text: str) -> None:
+                if self._on_message:
+                    result = self._on_message(device_id, f"[PAIRING] {text}")
+                    if inspect.isawaitable(result):
+                        await result
+
+            pairing_id = await self._auth.request_pairing(
+                device_id, device_name, notify_pairing
+            )
+            await ws.send(_jsonrpc_result(
+                {"status": "pairing_required", "pairing_id": pairing_id},
+                msg_id,
+            ))
             return None
 
         self._auth.update_last_seen(device_id)

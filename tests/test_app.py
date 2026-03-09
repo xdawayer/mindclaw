@@ -110,3 +110,66 @@ async def test_app_message_router_dispatches_to_agent():
 
     assert len(handled) == 1
     assert handled[0].text == "hi"
+
+
+@pytest.mark.asyncio
+async def test_approval_reply_must_match_channel_and_chat():
+    """BUG#2: Approval reply from wrong channel/chat_id must be ignored."""
+    from mindclaw.app import MindClawApp
+
+    config = MindClawConfig()
+    app = MindClawApp(config)
+
+    async def mock_handle(msg):
+        pass
+
+    app.agent_loop.handle_message = mock_handle
+
+    # Request approval on channel="cli", chat_id="local"
+    request_task = asyncio.create_task(
+        app.approval_manager.request_approval(
+            tool_name="exec",
+            arguments="rm -rf /",
+            channel="cli",
+            chat_id="local",
+        )
+    )
+    await asyncio.sleep(0.05)  # Let the approval request be created
+
+    # Send approval reply from WRONG channel (telegram, different chat_id)
+    wrong_channel_msg = InboundMessage(
+        channel="telegram",
+        chat_id="attacker-chat",
+        user_id="attacker",
+        username="mallory",
+        text="yes",
+    )
+    await app.bus.put_inbound(wrong_channel_msg)
+
+    # Run the message router briefly
+    router_task = asyncio.create_task(app._message_router())
+    await asyncio.sleep(0.1)
+
+    # The approval should still be pending (not resolved by wrong channel)
+    assert app.approval_manager.has_pending(), \
+        "Approval from wrong channel should be ignored, approval should still be pending"
+
+    # Now send from correct channel
+    correct_msg = InboundMessage(
+        channel="cli",
+        chat_id="local",
+        user_id="u1",
+        username="alice",
+        text="yes",
+    )
+    await app.bus.put_inbound(correct_msg)
+    await asyncio.sleep(0.1)
+
+    router_task.cancel()
+    try:
+        await router_task
+    except asyncio.CancelledError:
+        pass
+
+    result = await asyncio.wait_for(request_task, timeout=1.0)
+    assert result is True, "Approval from correct channel should be accepted"

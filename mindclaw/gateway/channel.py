@@ -47,7 +47,8 @@ class GatewayChannel(BaseChannel):
         if msg.chat_id:
             sent = await self._server.send_to_client(msg.chat_id, payload)
             if not sent:
-                # Fall back to broadcast if target device not connected
-                await self._server.broadcast(payload)
+                logger.warning(
+                    f"Gateway: device '{msg.chat_id}' offline, message dropped"
+                )
         else:
             await self._server.broadcast(payload)

@@ -51,7 +51,6 @@ class TelegramChannel(BaseChannel):
             await self._bot.send_message(
                 chat_id=int(msg.chat_id),
                 text=msg.text,
-                parse_mode="Markdown",
             )
         except Exception:
             logger.exception(f"Failed to send Telegram message to chat {msg.chat_id}")

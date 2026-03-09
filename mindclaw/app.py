@@ -179,9 +179,9 @@ class MindClawApp:
                 self._gateway_auth.handle_pairing_reply(msg.text)
                 continue
 
-            # 2. Approval reply interception
+            # 2. Approval reply interception (must match channel + chat_id)
             if self.approval_manager.has_pending() and self.approval_manager.is_approval_reply(
-                msg.text
+                msg.text, channel=msg.channel, chat_id=msg.chat_id
             ):
                 self.approval_manager.resolve(msg.text)
                 continue

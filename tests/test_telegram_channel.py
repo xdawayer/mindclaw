@@ -119,5 +119,24 @@ async def test_telegram_send():
     ch._bot.send_message.assert_awaited_once_with(
         chat_id=12345,
         text="reply text",
-        parse_mode="Markdown",
     )
+
+
+@pytest.mark.asyncio
+async def test_telegram_send_no_parse_mode():
+    """BUG#1: LLM output with Markdown chars must not use parse_mode to avoid message loss."""
+    from mindclaw.channels.telegram import TelegramChannel
+
+    bus = MessageBus()
+    ch = TelegramChannel(bus=bus, token="fake")
+    ch._bot = AsyncMock()
+
+    # Text with unescaped Markdown chars that would fail with parse_mode="Markdown"
+    text_with_markdown = "Use `code` and _underscores_ and [links](url)"
+    msg = OutboundMessage(channel="telegram", chat_id="12345", text=text_with_markdown)
+    await ch.send(msg)
+
+    call_kwargs = ch._bot.send_message.call_args
+    # Must NOT pass parse_mode at all
+    assert "parse_mode" not in call_kwargs.kwargs, \
+        "send() should not use parse_mode to avoid Telegram Markdown parse failures"
