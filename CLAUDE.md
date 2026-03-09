@@ -63,7 +63,7 @@ mindclaw/
 
 ## Development Phases
 
-当前进度：Phase 5 (Gateway + Telegram) — Phase 0-4 已完成
+当前进度：Phase 6 (编排层) — Phase 0-5 已完成
 
 | Phase | 内容 | 里程碑 |
 |-------|------|--------|
