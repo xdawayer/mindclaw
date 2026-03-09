@@ -23,3 +23,4 @@
 | `test_session_store.py` | 单元测试 | SessionStore JSONL 持久化和整合指针测试 |
 | `test_memory_manager.py` | 单元测试 | MemoryManager LLM 驱动记忆整合 (should_consolidate/load_memory/consolidate 流程) 测试 |
 | `test_context_builder.py` | 单元测试 | ContextBuilder 动态系统提示构建 (日期注入/记忆注入/无记忆场景) 测试 |
+| `test_crypto.py` | 单元测试 | SecretStore 加密存储 (初始化/读写/删除/持久化/文件权限) 测试 |

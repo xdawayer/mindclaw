@@ -7,3 +7,4 @@
 | `__init__.py` | 包入口 | 空 |
 | `sandbox.py` | 核心 | 命令黑名单 (is_command_denied) + 路径沙箱验证 (validate_path) |
 | `approval.py` | 核心 | 审批工作流 (`ApprovalManager`)，DANGEROUS 工具执行前的用户确认机制 |
+| `crypto.py` | 核心 | 加密存储 (`SecretStore`)，Fernet 对称加密保存 API Key 等敏感信息，0600 权限 |
