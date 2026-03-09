@@ -1,8 +1,8 @@
 # input: bus/queue.py, bus/events.py, llm/router.py, config/schema.py,
 #        tools/registry.py, security/approval.py, knowledge/session.py,
-#        knowledge/memory.py, orchestrator/context.py
+#        knowledge/memory.py, orchestrator/context.py, plugins/hooks.py
 # output: 导出 AgentLoop
-# pos: 编排层核心，ReAct 推理循环 (含工具调用)
+# pos: 编排层核心，ReAct 推理循环 (含工具调用 + before_tool/after_tool hooks)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import json
@@ -17,6 +17,7 @@ from mindclaw.knowledge.memory import MemoryManager
 from mindclaw.knowledge.session import SessionStore
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.context import ContextBuilder
+from mindclaw.plugins.hooks import HookRegistry
 from mindclaw.security.approval import ApprovalManager
 from mindclaw.tools.base import RiskLevel
 from mindclaw.tools.registry import ToolRegistry
@@ -35,12 +36,14 @@ class AgentLoop:
         session_store: SessionStore | None = None,
         memory_manager: MemoryManager | None = None,
         context_builder: ContextBuilder | None = None,
+        hook_registry: HookRegistry | None = None,
     ) -> None:
         self.config = config
         self.bus = bus
         self.router = router
         self.tool_registry = tool_registry or ToolRegistry()
         self.approval_manager = approval_manager
+        self.hook_registry = hook_registry or HookRegistry()
 
         data_dir = Path(config.knowledge.data_dir)
         self.session_store = session_store or SessionStore(data_dir=data_dir)
@@ -94,10 +97,24 @@ class AgentLoop:
                 )
         try:
             params = json.loads(arguments)
+
+            # before_tool hook: allows parameter modification
+            if self.hook_registry.has_handlers("before_tool"):
+                hook_result = await self.hook_registry.call_with_result(
+                    "before_tool", tool_name=name, params=params
+                )
+                params = hook_result.get("params", params)
+
             result = await tool.execute(params)
             max_chars = self.config.tools.tool_result_max_chars
             if len(result) > max_chars:
                 result = result[:max_chars] + "\n...(truncated)"
+
+            # after_tool hook: notification only
+            await self.hook_registry.call(
+                "after_tool", tool_name=name, params=params, result=result
+            )
+
             return result
         except json.JSONDecodeError:
             return f"Error: invalid JSON arguments for tool '{name}'"

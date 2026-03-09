@@ -1,6 +1,7 @@
 # input: config/schema.py, bus/queue.py, channels/manager.py, orchestrator/agent_loop.py,
 #        orchestrator/subagent.py, security/approval.py, knowledge/session.py,
-#        knowledge/memory.py, orchestrator/context.py, llm/router.py, tools/*, gateway/*
+#        knowledge/memory.py, orchestrator/context.py, llm/router.py, tools/*,
+#        gateway/*, plugins/loader.py, plugins/hooks.py
 # output: 导出 MindClawApp
 # pos: 顶层编排器，统一管理所有组件的生命周期和消息路由
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -16,6 +17,8 @@ from mindclaw.bus.queue import MessageBus
 from mindclaw.channels.cli_channel import CLIChannel
 from mindclaw.channels.manager import ChannelManager
 from mindclaw.config.schema import MindClawConfig
+from mindclaw.plugins.hooks import HookRegistry
+from mindclaw.plugins.loader import PluginLoader
 from mindclaw.knowledge.memory import MemoryManager
 from mindclaw.knowledge.session import SessionStore
 from mindclaw.llm.router import LLMRouter
@@ -40,6 +43,8 @@ class MindClawApp:
         self.router = LLMRouter(config)
         self.channel_manager = ChannelManager(self.bus)
         self.tool_registry = ToolRegistry()
+        self.hook_registry = HookRegistry()
+        self._plugins_dir = Path("plugins")
 
         data_dir = Path(config.knowledge.data_dir)
         self.session_store = SessionStore(data_dir=data_dir)
@@ -66,6 +71,7 @@ class MindClawApp:
             session_store=self.session_store,
             memory_manager=self.memory_manager,
             context_builder=self.context_builder,
+            hook_registry=self.hook_registry,
         )
 
         self._gateway_auth = None
@@ -96,6 +102,19 @@ class MindClawApp:
             ),
         ))
         self.tool_registry.register(SpawnTaskTool(manager=self.subagent_manager))
+
+        # Load plugins (after built-ins so plugins can override)
+        self._load_plugins()
+
+    def _load_plugins(self) -> None:
+        """Discover and load all plugins from plugins directory."""
+        loader = PluginLoader(self._plugins_dir)
+        for manifest in loader.discover():
+            try:
+                loader.load_one(manifest, self.tool_registry, self.hook_registry)
+                logger.info(f"Loaded plugin: {manifest.name} v{manifest.version}")
+            except Exception:
+                logger.warning(f"Failed to load plugin: {manifest.name}")
 
     # ── Channel setup ─────────────────────────────────────────
 
@@ -173,9 +192,24 @@ class MindClawApp:
 
     async def _process_message(self, msg: InboundMessage) -> None:
         try:
+            # on_message hook
+            await self.hook_registry.call(
+                "on_message",
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                user_id=msg.user_id,
+                text=msg.text,
+            )
             await self.agent_loop.handle_message(msg)
-        except Exception:
+        except Exception as exc:
             logger.exception("Agent error")
+            # on_error hook
+            await self.hook_registry.call(
+                "on_error",
+                error=str(exc),
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+            )
             await self.bus.put_outbound(
                 OutboundMessage(
                     channel=msg.channel,
@@ -217,6 +251,13 @@ class MindClawApp:
     async def _outbound_router(self) -> None:
         while True:
             msg = await self.bus.get_outbound()
+            # on_reply hook
+            await self.hook_registry.call(
+                "on_reply",
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                text=msg.text,
+            )
             await self.channel_manager.dispatch_outbound(msg)
 
     # ── Lifecycle ─────────────────────────────────────────────
@@ -234,6 +275,9 @@ class MindClawApp:
 
         self._register_tools()
         self._setup_channels(channel_names)
+
+        # on_start hook
+        await self.hook_registry.call("on_start")
 
         tasks = [
             asyncio.create_task(self.channel_manager.start_all()),
@@ -257,4 +301,6 @@ class MindClawApp:
                     await self._agent_task
                 except asyncio.CancelledError:
                     pass
+            # on_stop hook
+            await self.hook_registry.call("on_stop")
             await self.channel_manager.stop_all()
