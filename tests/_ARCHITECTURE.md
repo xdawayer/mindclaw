@@ -4,12 +4,13 @@
 
 | 文件 | 地位 | 功能 |
 |------|------|------|
+| `conftest.py` | 配置 | autouse fixture 隔离 data 目录，防止跨测试数据污染 |
 | `__init__.py` | 包入口 | 空 |
 | `test_import.py` | 冒烟测试 | 验证 mindclaw 包可导入 |
 | `test_config.py` | 单元测试 | 配置系统 Schema + Loader 测试 |
 | `test_llm.py` | 单元测试 | LLM 路由层 (LLMRouter + ChatResult) 测试 |
 | `test_bus.py` | 单元测试 | 消息总线 (InboundMessage / OutboundMessage / MessageBus) 测试 |
-| `test_agent_loop.py` | 单元测试 | 编排层 Agent Loop (AgentLoop) 测试 |
+| `test_agent_loop.py` | 单元测试 | 编排层 Agent Loop (AgentLoop) 测试，含 SessionStore 持久化验证和 ContextBuilder 集成验证 |
 | `test_cli_channel.py` | 单元测试 | 渠道层 (BaseChannel / CLIChannel) 测试 |
 | `test_tools_base.py` | 单元测试 | 工具层 (Tool ABC / RiskLevel / ToolRegistry) 测试 |
 | `test_tools_shell.py` | 单元测试 | 工具层 Shell 执行 (ExecTool) 测试 |

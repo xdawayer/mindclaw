@@ -1,25 +1,25 @@
 # input: bus/queue.py, bus/events.py, llm/router.py, config/schema.py,
-#        tools/registry.py, security/approval.py
+#        tools/registry.py, security/approval.py, knowledge/session.py,
+#        knowledge/memory.py, orchestrator/context.py
 # output: 导出 AgentLoop
 # pos: 编排层核心，ReAct 推理循环 (含工具调用)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import json
+from pathlib import Path
 
 from loguru import logger
 
 from mindclaw.bus.events import InboundMessage, OutboundMessage
 from mindclaw.bus.queue import MessageBus
 from mindclaw.config.schema import MindClawConfig
+from mindclaw.knowledge.memory import MemoryManager
+from mindclaw.knowledge.session import SessionStore
 from mindclaw.llm.router import LLMRouter
+from mindclaw.orchestrator.context import ContextBuilder
 from mindclaw.security.approval import ApprovalManager
 from mindclaw.tools.base import RiskLevel
 from mindclaw.tools.registry import ToolRegistry
-
-SYSTEM_PROMPT = """\
-You are MindClaw, a personal AI assistant. You are helpful, concise, and accurate.
-Respond in the same language as the user's message.
-"""
 
 MAX_HISTORY_MESSAGES = 100
 
@@ -32,30 +32,40 @@ class AgentLoop:
         router: LLMRouter,
         tool_registry: ToolRegistry | None = None,
         approval_manager: ApprovalManager | None = None,
+        session_store: SessionStore | None = None,
+        memory_manager: MemoryManager | None = None,
+        context_builder: ContextBuilder | None = None,
     ) -> None:
         self.config = config
         self.bus = bus
         self.router = router
         self.tool_registry = tool_registry or ToolRegistry()
         self.approval_manager = approval_manager
-        self._sessions: dict[str, list[dict]] = {}
+
+        data_dir = Path(config.knowledge.data_dir)
+        self.session_store = session_store or SessionStore(data_dir=data_dir)
+        self.memory_manager = memory_manager or MemoryManager(
+            data_dir=data_dir, router=router, config=config,
+        )
+        self.context_builder = context_builder or ContextBuilder(
+            memory_manager=self.memory_manager,
+        )
+
         self._current_channel: str = ""
         self._current_chat_id: str = ""
 
     def _get_history(self, session_key: str) -> list[dict]:
-        if session_key not in self._sessions:
-            self._sessions[session_key] = []
-        history = self._sessions[session_key]
+        history, _ = self.session_store.load(session_key)
         if len(history) > MAX_HISTORY_MESSAGES:
             cutoff = max(0, len(history) - MAX_HISTORY_MESSAGES)
-            # Walk back to a 'user' message boundary to avoid orphaned tool/assistant messages
             while cutoff > 0 and history[cutoff].get("role") != "user":
                 cutoff -= 1
-            self._sessions[session_key] = history[cutoff:]
-        return self._sessions[session_key]
+            history = history[cutoff:]
+        return history
 
     def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        system_prompt = self.context_builder.build_system_prompt()
+        messages = [{"role": "system", "content": system_prompt}]
         messages.extend(history)
         messages.append({"role": "user", "content": user_text})
         return messages
@@ -140,14 +150,22 @@ class AgentLoop:
                     "and couldn't complete the task."
                 )
         except Exception:
-            # Session poisoning protection: rollback history on error
-            del history[initial_history_len:]
+            # Session poisoning protection: new messages are NOT persisted
+            # because append() only runs after successful completion
             raise
 
-        # Store full message chain (skip system prompt + existing history)
-        for msg in messages[1 + initial_history_len:]:
-            history.append(msg)
-        history.append({"role": "assistant", "content": reply_text})
+        # Persist new messages to SessionStore
+        new_messages = list(messages[1 + initial_history_len:])
+        new_messages.append({"role": "assistant", "content": reply_text})
+        self.session_store.append(session_key, new_messages)
+
+        # Check for automatic consolidation
+        unconsolidated, _ = self.session_store.load(session_key)
+        if self.memory_manager.should_consolidate(len(unconsolidated)):
+            try:
+                await self.memory_manager.consolidate(session_key, self.session_store)
+            except Exception:
+                logger.exception("Auto-consolidation failed")
 
         outbound = OutboundMessage(
             channel=inbound.channel,
