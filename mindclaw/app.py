@@ -1,7 +1,8 @@
 # input: config/schema.py, bus/queue.py, channels/manager.py, orchestrator/agent_loop.py,
 #        orchestrator/subagent.py, security/approval.py, knowledge/session.py,
 #        knowledge/memory.py, knowledge/vector.py, orchestrator/context.py, llm/router.py,
-#        tools/*, gateway/*, plugins/loader.py, plugins/hooks.py
+#        tools/*, gateway/*, plugins/loader.py, plugins/hooks.py,
+#        skills/installer.py, skills/index_client.py
 # output: 导出 MindClawApp
 # pos: 顶层编排器，统一管理所有组件的生命周期和消息路由
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -29,6 +30,8 @@ from mindclaw.orchestrator.subagent import SubAgentManager
 from mindclaw.plugins.hooks import HookRegistry
 from mindclaw.plugins.loader import PluginLoader
 from mindclaw.security.approval import ApprovalManager
+from mindclaw.skills.index_client import IndexClient
+from mindclaw.skills.installer import SkillInstaller
 from mindclaw.skills.registry import SkillRegistry
 from mindclaw.tools.cron import CronAddTool, CronListTool, CronRemoveTool
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
@@ -75,8 +78,23 @@ class MindClawApp:
         )
 
         # Skills
-        skills_dir = Path(__file__).parent / "skills"
-        self.skill_registry = SkillRegistry(skills_dir)
+        self.skill_registry = SkillRegistry([
+            Path(__file__).parent / "skills",  # builtin
+            data_dir / "plugins" / "skills",   # project
+            data_dir / "skills",               # user
+        ])
+
+        self.skill_index_client = IndexClient(
+            index_url=config.skills.index_url,
+            cache_dir=data_dir,
+            cache_ttl=config.skills.cache_ttl,
+        )
+        self.skill_installer = SkillInstaller(
+            user_skills_dir=data_dir / "skills",
+            registry=self.skill_registry,
+            index_client=self.skill_index_client,
+            max_skill_size=config.skills.max_skill_size,
+        )
 
         self.context_builder = ContextBuilder(
             memory_manager=self.memory_manager,
@@ -169,6 +187,23 @@ class MindClawApp:
         self.tool_registry.register(CronAddTool(data_dir=data_dir))
         self.tool_registry.register(CronListTool(data_dir=data_dir))
         self.tool_registry.register(CronRemoveTool(data_dir=data_dir))
+
+        # Skill tools
+        from mindclaw.tools.skill_tools import (
+            SkillInstallTool,
+            SkillListTool,
+            SkillRemoveTool,
+            SkillSearchTool,
+            SkillShowTool,
+        )
+        self.tool_registry.register(SkillSearchTool(index_client=self.skill_index_client))
+        self.tool_registry.register(SkillShowTool(registry=self.skill_registry))
+        self.tool_registry.register(SkillListTool(registry=self.skill_registry))
+        self.tool_registry.register(SkillInstallTool(
+            installer=self.skill_installer,
+            registry=self.skill_registry,
+        ))
+        self.tool_registry.register(SkillRemoveTool(installer=self.skill_installer))
 
         # Load plugins (after built-ins so plugins can override)
         self._load_plugins()

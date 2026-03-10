@@ -171,3 +171,177 @@ def test_registry_skill_file_path(skills_dir):
     summarize = registry.get("summarize-article")
     assert summarize is not None
     assert summarize.file_path == skills_dir / "summarize.md"
+
+
+# ---------------------------------------------------------------------------
+# Multi-directory support tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def multi_dir_setup(tmp_path):
+    """Create 3 tmp dirs simulating builtin / project / user layers."""
+    from textwrap import dedent
+
+    builtin_dir = tmp_path / "builtin"
+    project_dir = tmp_path / "project"
+    user_dir = tmp_path / "user"
+    builtin_dir.mkdir()
+    project_dir.mkdir()
+    user_dir.mkdir()
+
+    # builtin: translate + summarize
+    (builtin_dir / "translate.md").write_text(dedent("""\
+        ---
+        name: translate
+        description: Builtin translate skill
+        load: on_demand
+        ---
+
+        Builtin translate content.
+    """))
+    (builtin_dir / "summarize.md").write_text(dedent("""\
+        ---
+        name: summarize-article
+        description: Builtin summarize skill
+        load: on_demand
+        ---
+
+        Builtin summarize content.
+    """))
+
+    # project: empty (no .md files)
+
+    # user: translate with different description (overrides builtin)
+    (user_dir / "translate.md").write_text(dedent("""\
+        ---
+        name: translate
+        description: User translate skill
+        load: on_demand
+        ---
+
+        User translate content.
+    """))
+
+    return builtin_dir, project_dir, user_dir
+
+
+def test_multi_dir_discovery(multi_dir_setup):
+    """SkillRegistry with multiple dirs discovers skills across all dirs (2 unique skills)."""
+    from mindclaw.skills.registry import SkillRegistry
+
+    builtin_dir, project_dir, user_dir = multi_dir_setup
+    registry = SkillRegistry([builtin_dir, project_dir, user_dir])
+
+    assert len(registry.skills) == 2
+    names = {s.name for s in registry.skills}
+    assert names == {"translate", "summarize-article"}
+
+
+def test_multi_dir_user_overrides_builtin(multi_dir_setup):
+    """User-layer skill overrides builtin skill; description reflects user version."""
+    from mindclaw.skills.registry import SkillRegistry
+
+    builtin_dir, project_dir, user_dir = multi_dir_setup
+    registry = SkillRegistry([builtin_dir, project_dir, user_dir])
+
+    translate = registry.get("translate")
+    assert translate is not None
+    assert translate.description == "User translate skill"
+
+
+def test_atomic_reload(multi_dir_setup):
+    """After adding a new skill file and calling reload(), the new skill appears."""
+    from textwrap import dedent
+
+    from mindclaw.skills.registry import SkillRegistry
+
+    builtin_dir, project_dir, user_dir = multi_dir_setup
+    registry = SkillRegistry([builtin_dir, project_dir, user_dir])
+
+    assert registry.get("new-skill") is None
+
+    (user_dir / "new-skill.md").write_text(dedent("""\
+        ---
+        name: new-skill
+        description: A brand new skill
+        load: on_demand
+        ---
+
+        New skill content.
+    """))
+
+    registry.reload()
+
+    skill = registry.get("new-skill")
+    assert skill is not None
+    assert skill.description == "A brand new skill"
+
+
+def test_protected_names(multi_dir_setup):
+    """First directory's skill names are in registry.protected_names."""
+    from mindclaw.skills.registry import SkillRegistry
+
+    builtin_dir, project_dir, user_dir = multi_dir_setup
+    registry = SkillRegistry([builtin_dir, project_dir, user_dir])
+
+    assert "translate" in registry.protected_names
+    assert "summarize-article" in registry.protected_names
+
+
+def test_get_skill_source_layer(multi_dir_setup):
+    """translate from user has source_layer='user'; summarize from builtin has source_layer='builtin'."""
+    from mindclaw.skills.registry import SkillRegistry
+
+    builtin_dir, project_dir, user_dir = multi_dir_setup
+    registry = SkillRegistry([builtin_dir, project_dir, user_dir])
+
+    translate = registry.get("translate")
+    assert translate is not None
+    assert translate.source_layer == "user"
+
+    summarize = registry.get("summarize-article")
+    assert summarize is not None
+    assert summarize.source_layer == "builtin"
+
+
+def test_single_path_backward_compat(skills_dir):
+    """SkillRegistry(single_path) still works (backward compatibility)."""
+    from mindclaw.skills.registry import SkillRegistry
+
+    registry = SkillRegistry(skills_dir)
+    assert len(registry.skills) == 2
+
+
+def test_skip_underscore_prefixed_files(tmp_path):
+    """Files starting with _ (like _ARCHITECTURE.md) must be skipped."""
+    from textwrap import dedent
+
+    from mindclaw.skills.registry import SkillRegistry
+
+    d = tmp_path / "skills"
+    d.mkdir()
+
+    (d / "_ARCHITECTURE.md").write_text(dedent("""\
+        ---
+        name: should-be-skipped
+        description: Should not appear
+        load: on_demand
+        ---
+
+        Architecture doc.
+    """))
+    (d / "real-skill.md").write_text(dedent("""\
+        ---
+        name: real-skill
+        description: A real skill
+        load: on_demand
+        ---
+
+        Real skill content.
+    """))
+
+    registry = SkillRegistry(d)
+
+    assert registry.get("should-be-skipped") is None
+    assert registry.get("real-skill") is not None
+    assert len(registry.skills) == 1

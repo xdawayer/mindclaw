@@ -34,6 +34,9 @@
 mindclaw/
 ├── mindclaw/          # 主包
 │   ├── cli/           # CLI 入口 (typer)
+│   │   ├── commands.py
+│   │   ├── daemon.py
+│   │   └── skill_commands.py     # 技能管理子命令
 │   ├── gateway/       # WebSocket Gateway
 │   ├── channels/      # 渠道适配 (base → 各平台实现)
 │   ├── bus/           # 消息总线 (events + queue)
@@ -41,9 +44,23 @@ mindclaw/
 │   ├── llm/           # LLM 路由 (litellm + cache)
 │   ├── security/      # 安全 (auth + approval + sandbox)
 │   ├── tools/         # 工具 (base + registry + 各工具实现)
+│   │   ├── base.py
+│   │   ├── registry.py
+│   │   ├── file_ops.py
+│   │   ├── shell.py
+│   │   ├── web.py
+│   │   ├── cron.py
+│   │   ├── memory.py
+│   │   └── skill_tools.py        # 技能管理工具 (search/install/remove/list/show)
 │   ├── plugins/       # 插件系统 (loader + hooks)
 │   ├── knowledge/     # 知识层 (memory + session + obsidian + notion)
-│   ├── skills/        # 技能系统 (SkillRegistry + Markdown 技能文件)
+│   ├── skills/        # 技能系统 (多目录注册 + 安装管理)
+│   │   ├── registry.py           # SkillRegistry 核心 (builtin/project/user 扫描，原子重载，保护名称)
+│   │   ├── installer.py          # 安装/卸载/更新 (本地/URL/GitHub/索引源)
+│   │   ├── index_client.py       # 索引拉取、本地缓存 (TTL 24h)、搜索
+│   │   ├── integrity.py          # SHA256 校验、SSRF 过滤、格式校验、大小限制
+│   │   ├── summarize.md          # 内置技能: 文章总结
+│   │   └── translate.md          # 内置技能: 翻译
 │   ├── health/        # 健康检查 (HealthMonitor + HTTP /health /ready)
 │   ├── templates/     # SOUL.md / AGENTS.md
 │   └── config/        # Pydantic 配置 (schema + loader)
@@ -65,7 +82,7 @@ mindclaw/
 
 ## Development Phases
 
-当前进度：Phase 10 全部完成 — LLM 自动降级、技能系统、定时任务、健康检查、微信渠道、Daemon 部署、向量搜索 (LanceDB) 均已实现
+当前进度：Phase 10+ 全部完成 — LLM 自动降级、技能系统、定时任务、健康检查、微信渠道、Daemon 部署、向量搜索 (LanceDB)、技能安装系统均已实现
 
 | Phase | 内容 | 里程碑 |
 |-------|------|--------|
@@ -80,6 +97,7 @@ mindclaw/
 | 8 | 更多渠道 (Discord/Slack/飞书) | 多平台接入 |
 | 9 | 知识管理 (Obsidian/Notion/WebArchive) | 外部知识源整合 |
 | 10 | LLM 自动降级 + 技能系统 + 定时任务 + 健康检查 + 微信渠道 + Daemon 部署 | 生产就绪 |
+| 10+ | 技能安装系统 | 支持从本地/URL/GitHub/索引安装技能 |
 
 ---
 

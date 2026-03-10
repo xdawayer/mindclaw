@@ -703,6 +703,9 @@ dependencies:
   bins: []
   env: []
 load: on_demand    # on_demand | always
+version: 1.0.0
+source: github:user/repo           # 安装时自动写入
+sha256: abcdef1234567890...         # 安装时自动写入
 ---
 
 # 总结文章
@@ -725,6 +728,19 @@ load: on_demand    # on_demand | always
 - 系统提示中只包含技能摘要 (名称 + 描述)
 - Agent 需要时通过 `read_file` 加载完整内容
 - `always` 类型的技能完整内容始终在系统提示中
+
+**技能安装系统 (Phase 10+ 新增)：**
+- **三层技能发现：** 内置 > 项目级 > 用户级（用户级优先覆盖）
+- **四种安装源：**
+  - 本地文件：`mindclaw skill install ./my-skill.md`
+  - HTTPS URL：`mindclaw skill install https://example.com/skill.md`
+  - GitHub 仓库：`mindclaw skill install github:user/repo@skill-name`
+  - 集中索引：`mindclaw skill install code-review`（从索引搜索）
+- **双入口：**
+  - CLI 子命令：`mindclaw skill install/search/list/remove/show/update`
+  - 对话中 LLM 工具调用：`skill_search` (搜索) / `skill_install` (安装) / `skill_remove` (删除) / `skill_list` (列表) / `skill_show` (详情)
+- **安全机制：** SHA256 完整性校验（索引 + URL + GitHub 源）、SSRF 防护（HTTPS-only，私有 IP 过滤）、格式校验、大小限制（8KB 单文件，32KB 所有 always 技能），用户安装的远程技能强制 `load: on_demand`，避免 prompt injection
+- **自主发现流程：** LLM 遇到无匹配技能 → 调用 `skill_search` 搜索 → 提议用户 → 经用户审批 (`skill_install` 触发 DANGEROUS 审批) → 安装 → 热加载 → 立即使用
 
 ---
 

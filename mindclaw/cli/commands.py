@@ -1,6 +1,6 @@
-# input: typer, app.py, config/loader.py, security/crypto.py, oauth/
+# input: typer, app.py, config/loader.py, security/crypto.py, oauth/, cli/skill_commands.py
 # output: 导出 app (Typer 应用)
-# pos: CLI 入口，chat/serve/secret/auth 命令
+# pos: CLI 入口，chat/serve/secret/auth/skill 命令
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
@@ -9,9 +9,11 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from mindclaw.cli.skill_commands import skill_app
 from mindclaw.config.loader import load_config
 
 app = typer.Typer(name="mindclaw", help="MindClaw - Personal AI Assistant")
+app.add_typer(skill_app, name="skill")
 console = Console()
 
 

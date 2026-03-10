@@ -1,8 +1,8 @@
 # input: pydantic
 # output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ChannelConfig, ProviderSettings,
 #         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig,
-#         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig
-# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置)
+#         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig, SkillsConfig
+# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置和技能安装配置)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from typing import Literal
@@ -129,6 +129,22 @@ class KnowledgeConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class SkillsConfig(BaseModel):
+    index_url: str = Field(
+        default="https://raw.githubusercontent.com/mindclaw-skills/index/main/index.json",
+        alias="indexUrl",
+    )
+    cache_ttl: int = Field(default=86400, alias="cacheTtl")
+    max_skill_size: int = Field(default=8192, alias="maxSkillSize")
+    max_always_total: int = Field(
+        default=32768,
+        alias="maxAlwaysTotal",
+        description="Reserved for future enforcement of total size of always-loaded skills",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
 class MindClawConfig(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
@@ -138,5 +154,6 @@ class MindClawConfig(BaseModel):
     log: LogConfig = Field(default_factory=LogConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
+    skills: SkillsConfig = Field(default_factory=SkillsConfig)
 
     model_config = {"populate_by_name": True}

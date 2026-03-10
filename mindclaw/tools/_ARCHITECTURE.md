@@ -14,3 +14,4 @@
 | `spawn_task.py` | 内置工具 | SpawnTaskTool - 派发子 Agent 任务 (DANGEROUS)，通过 SubAgentManager 管理 |
 | `cron.py` | 内置工具 | CronAddTool / CronListTool / CronRemoveTool - 定时任务 CRUD (MODERATE)，持久化到 cron_tasks.json |
 | `memory.py` | 内置工具 | MemorySaveTool (MODERATE) + MemorySearchTool (SAFE) — 长期记忆保存/语义+关键词搜索 |
+| `skill_tools.py` | 内置工具 | LLM 技能管理工具集: skill_search(MODERATE)/skill_show(SAFE)/skill_install(DANGEROUS)/skill_remove(DANGEROUS)/skill_list(SAFE) |
