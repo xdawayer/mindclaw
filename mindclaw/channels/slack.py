@@ -47,6 +47,8 @@ class SlackChannel(BaseChannel):
     async def stop(self) -> None:
         if self._socket_client:
             await self._socket_client.disconnect()
+        if self._web_client and self._web_client.session:
+            await self._web_client.session.close()
 
     async def send(self, msg: OutboundMessage) -> None:
         if self._web_client is None:
