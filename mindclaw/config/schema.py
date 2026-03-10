@@ -1,10 +1,20 @@
 # input: pydantic
-# output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ProviderSettings,
-#         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig
-# pos: 配置层核心，定义所有配置的 Pydantic 模型
+# output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ChannelConfig, ProviderSettings,
+#         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig,
+#         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig
+# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+class ModelRoutingConfig(BaseModel):
+    enabled: bool = False
+    categories: dict[str, str] = Field(default_factory=dict)
+
+    model_config = {"populate_by_name": True}
 
 
 class AgentConfig(BaseModel):
@@ -12,6 +22,21 @@ class AgentConfig(BaseModel):
     fallback_model: str = Field(default="gpt-4o", alias="fallbackModel")
     max_iterations: int = Field(default=40, alias="maxIterations")
     subagent_max_iterations: int = Field(default=15, alias="subagentMaxIterations")
+    model_routing: ModelRoutingConfig = Field(
+        default_factory=ModelRoutingConfig, alias="modelRouting"
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class ChannelConfig(BaseModel):
+    enabled: bool = True
+    token: str = ""
+    app_token: str = Field(default="", alias="appToken")
+    app_id: str = Field(default="", alias="appId")
+    app_secret: str = Field(default="", alias="appSecret")
+    allow_from: list[str] = Field(default_factory=list, alias="allowFrom")
+    allow_groups: bool = Field(default=False, alias="allowGroups")
 
     model_config = {"populate_by_name": True}
 
@@ -19,6 +44,7 @@ class AgentConfig(BaseModel):
 class GatewayConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8765
+    token: str = ""
 
     model_config = {"populate_by_name": True}
 
@@ -26,6 +52,7 @@ class GatewayConfig(BaseModel):
 class ProviderSettings(BaseModel):
     api_key: str = Field(default="", alias="apiKey")
     api_base: str | None = Field(default=None, alias="apiBase")
+    auth_type: Literal["api_key", "oauth"] = Field(default="api_key", alias="authType")
 
     model_config = {"populate_by_name": True}
 
@@ -50,9 +77,42 @@ class LogConfig(BaseModel):
 
 class SecurityConfig(BaseModel):
     approval_timeout: int = Field(default=300, alias="approvalTimeout")
+    pairing_timeout: int = Field(default=300, alias="pairingTimeout")
     session_poisoning_protection: bool = Field(
         default=True, alias="sessionPoisoningProtection"
     )
+
+    model_config = {"populate_by_name": True}
+
+
+class ObsidianConfig(BaseModel):
+    vault_path: str = Field(default="", alias="vaultPath")
+
+    model_config = {"populate_by_name": True}
+
+
+class NotionConfig(BaseModel):
+    api_key: str = Field(default="", alias="apiKey")
+
+    model_config = {"populate_by_name": True}
+
+
+class WebArchiveConfig(BaseModel):
+    max_pages: int = Field(default=1000, alias="maxPages")
+
+    model_config = {"populate_by_name": True}
+
+
+class VectorDbConfig(BaseModel):
+    enabled: bool = False
+    provider: str = "lancedb"
+    embedding_model: str = Field(default="text-embedding-3-small", alias="embeddingModel")
+    db_path: str = Field(default="vector_db", alias="dbPath")
+    table_name: str = Field(default="documents", alias="tableName")
+    embedding_dimensions: int = Field(default=1536, alias="embeddingDimensions")
+    chunk_size: int = Field(default=500, alias="chunkSize")
+    chunk_overlap: int = Field(default=50, alias="chunkOverlap")
+    top_k: int = Field(default=5, alias="topK")
 
     model_config = {"populate_by_name": True}
 
@@ -61,6 +121,10 @@ class KnowledgeConfig(BaseModel):
     data_dir: str = Field(default="data", alias="dataDir")
     consolidation_threshold: int = Field(default=20, alias="consolidationThreshold")
     consolidation_keep_recent: int = Field(default=10, alias="consolidationKeepRecent")
+    obsidian: ObsidianConfig = Field(default_factory=ObsidianConfig)
+    notion: NotionConfig = Field(default_factory=NotionConfig)
+    web_archive: WebArchiveConfig = Field(default_factory=WebArchiveConfig, alias="webArchive")
+    vector_db: VectorDbConfig = Field(default_factory=VectorDbConfig, alias="vectorDb")
 
     model_config = {"populate_by_name": True}
 
@@ -68,6 +132,7 @@ class KnowledgeConfig(BaseModel):
 class MindClawConfig(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
+    channels: dict[str, ChannelConfig] = Field(default_factory=dict)
     providers: dict[str, ProviderSettings] = Field(default_factory=dict)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     log: LogConfig = Field(default_factory=LogConfig)

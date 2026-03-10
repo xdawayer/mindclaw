@@ -12,13 +12,30 @@ dependencies = [
     "httpx>=0.28",
     "loguru>=0.7",
     "websockets>=14.0",
+    "python-telegram-bot>=21.0",
+    "cryptography>=44.0",
+    "croniter>=1.4",
+    "slack-sdk>=3.33",
+    "markdown-to-mrkdwn>=0.3.1",
 ]
 
 [project.optional-dependencies]
+slack = ["slack-sdk>=3.33"]
+feishu = ["lark-oapi>=1.0"]
+discord = ["discord.py>=2.0"]
+all-channels = [
+    "slack-sdk>=3.33",
+    "lark-oapi>=1.0",
+    "discord.py>=2.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",
     "ruff>=0.9",
+]
+vector = [
+    "lancedb>=0.6",
+    "pyarrow>=15.0",
 ]
 
 [project.scripts]

@@ -1,14 +1,17 @@
 {
-  "agent": {
-    "defaultModel": "claude-sonnet-4-20250514",
-    "fallbackModel": "gpt-4o",
-    "maxIterations": 40
+  "agent": { "defaultModel": "claude-sonnet-4-20250514" },
+  "gateway": { "host": "127.0.0.1", "port": 8765 },
+  "channels": {
+    "telegram": {
+      "token": "$TELEGRAM_BOT_TOKEN",
+      "allowFrom": [],
+      "allowGroups": false
+    }
   },
   "providers": {
     "anthropic": { "apiKey": "$ANTHROPIC_API_KEY" },
-    "openai": { "apiKey": "$OPENAI_API_KEY" }
+    "tavily": { "apiKey": "$TAVILY_API_KEY" }
   },
-  "log": {
-    "level": "INFO"
-  }
+  "tools": { "execTimeout": 30 },
+  "knowledge": { "dataDir": "data" }
 }

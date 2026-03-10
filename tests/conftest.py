@@ -5,8 +5,6 @@
 
 """Shared test fixtures and configuration."""
 
-import os
-import tempfile
 
 import pytest
 

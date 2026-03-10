@@ -3,6 +3,7 @@
 # pos: 大脑层测试入口
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -111,3 +112,108 @@ def test_llm_router_provider_prefix_mapping():
     assert router._extract_provider("gpt-4o") == "openai"
     assert router._extract_provider("anthropic/claude-3") == "anthropic"
     assert router._extract_provider("unknown-model") is None
+
+
+def test_llm_router_gemini_provider_mapping():
+    """gemini 模型应映射到 google provider"""
+    from mindclaw.config.schema import MindClawConfig
+    from mindclaw.llm.router import LLMRouter
+
+    router = LLMRouter(MindClawConfig())
+    assert router._extract_provider("gemini-2.0-flash") == "google"
+    assert router._extract_provider("gemini-2.5-pro") == "google"
+    assert router._extract_provider("google/gemini-2.0-flash") == "google"
+
+
+def test_llm_router_deepseek_provider_mapping():
+    """deepseek 模型应映射到 deepseek provider"""
+    from mindclaw.config.schema import MindClawConfig
+    from mindclaw.llm.router import LLMRouter
+
+    router = LLMRouter(MindClawConfig())
+    assert router._extract_provider("deepseek/deepseek-chat") == "deepseek"
+    assert router._extract_provider("deepseek-chat") == "deepseek"
+
+
+@pytest.mark.asyncio
+async def test_llm_router_uses_oauth_token():
+    """When provider has oauth auth_type, should use OAuthManager token."""
+    from mindclaw.config.schema import MindClawConfig, ProviderSettings
+    from mindclaw.llm.router import LLMRouter
+
+    config = MindClawConfig(
+        providers={"openai": ProviderSettings(auth_type="oauth")}
+    )
+    mock_oauth = AsyncMock()
+    mock_oauth.get_access_token.return_value = "oauth_access_token_123"
+
+    router = LLMRouter(config, oauth_manager=mock_oauth)
+
+    mock_response = AsyncMock()
+    mock_response.choices = [AsyncMock()]
+    mock_response.choices[0].message.content = "Hello!"
+    mock_response.choices[0].message.tool_calls = None
+
+    captured_kwargs = {}
+
+    async def capture_acompletion(**kwargs):
+        captured_kwargs.update(kwargs)
+        return mock_response
+
+    with patch("mindclaw.llm.router.acompletion", side_effect=capture_acompletion):
+        await router.chat(
+            messages=[{"role": "user", "content": "Hi"}],
+            model="openai/gpt-4o",
+        )
+
+    assert captured_kwargs["api_key"] == "oauth_access_token_123"
+    mock_oauth.get_access_token.assert_awaited_once_with("openai")
+
+
+@pytest.mark.asyncio
+async def test_llm_router_oauth_uses_api_base_from_provider():
+    """OAuth provider should also use api_base from OAUTH_PROVIDERS config."""
+    from mindclaw.config.schema import MindClawConfig, ProviderSettings
+    from mindclaw.llm.router import LLMRouter
+
+    config = MindClawConfig(
+        providers={"openai": ProviderSettings(auth_type="oauth")}
+    )
+    mock_oauth = AsyncMock()
+    mock_oauth.get_access_token.return_value = "token"
+
+    router = LLMRouter(config, oauth_manager=mock_oauth)
+
+    mock_response = AsyncMock()
+    mock_response.choices = [AsyncMock()]
+    mock_response.choices[0].message.content = "Hi"
+    mock_response.choices[0].message.tool_calls = None
+
+    captured_kwargs = {}
+
+    async def capture(**kwargs):
+        captured_kwargs.update(kwargs)
+        return mock_response
+
+    with patch("mindclaw.llm.router.acompletion", side_effect=capture):
+        await router.chat(
+            messages=[{"role": "user", "content": "Hi"}],
+            model="openai/gpt-4o",
+        )
+
+    assert captured_kwargs.get("api_base") == "https://api.openai.com/v1"
+
+
+def test_provider_settings_auth_type_default():
+    """ProviderSettings should default to api_key auth_type."""
+    from mindclaw.config.schema import ProviderSettings
+
+    settings = ProviderSettings()
+    assert settings.auth_type == "api_key"
+
+
+def test_provider_settings_auth_type_oauth():
+    from mindclaw.config.schema import ProviderSettings
+
+    settings = ProviderSettings(auth_type="oauth")
+    assert settings.auth_type == "oauth"

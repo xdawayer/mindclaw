@@ -1,0 +1,12 @@
+{
+  "name": "hello_world",
+  "version": "0.1.0",
+  "description": "Example plugin demonstrating tool and hook registration",
+  "author": "wzb",
+  "entry": "main.py",
+  "tools": ["HelloTool"],
+  "hooks": {
+    "before_tool": "hooks.before_tool_handler",
+    "after_tool": "hooks.after_tool_handler"
+  }
+}

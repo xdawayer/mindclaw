@@ -1,8 +1,8 @@
 # input: bus/queue.py, bus/events.py, llm/router.py, config/schema.py,
 #        tools/registry.py, security/approval.py, knowledge/session.py,
-#        knowledge/memory.py, orchestrator/context.py
+#        knowledge/memory.py, orchestrator/context.py, plugins/hooks.py
 # output: 导出 AgentLoop
-# pos: 编排层核心，ReAct 推理循环 (含工具调用)
+# pos: 编排层核心，ReAct 推理循环 (含工具调用 + before_tool/after_tool hooks)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import json
@@ -17,6 +17,7 @@ from mindclaw.knowledge.memory import MemoryManager
 from mindclaw.knowledge.session import SessionStore
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.context import ContextBuilder
+from mindclaw.plugins.hooks import HookRegistry
 from mindclaw.security.approval import ApprovalManager
 from mindclaw.tools.base import RiskLevel
 from mindclaw.tools.registry import ToolRegistry
@@ -35,12 +36,14 @@ class AgentLoop:
         session_store: SessionStore | None = None,
         memory_manager: MemoryManager | None = None,
         context_builder: ContextBuilder | None = None,
+        hook_registry: HookRegistry | None = None,
     ) -> None:
         self.config = config
         self.bus = bus
         self.router = router
         self.tool_registry = tool_registry or ToolRegistry()
         self.approval_manager = approval_manager
+        self.hook_registry = hook_registry or HookRegistry()
 
         data_dir = Path(config.knowledge.data_dir)
         self.session_store = session_store or SessionStore(data_dir=data_dir)
@@ -61,10 +64,35 @@ class AgentLoop:
             while cutoff > 0 and history[cutoff].get("role") != "user":
                 cutoff -= 1
             history = history[cutoff:]
-        return history
+        return self._sanitize_history(history)
 
-    def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
-        system_prompt = self.context_builder.build_system_prompt()
+    @staticmethod
+    def _sanitize_history(history: list[dict]) -> list[dict]:
+        """Remove orphaned tool messages that lack a preceding tool_calls assistant message."""
+        result: list[dict] = []
+        pending_tool_call_ids: set[str] = set()
+        for msg in history:
+            role = msg.get("role")
+            if role == "assistant" and msg.get("tool_calls"):
+                pending_tool_call_ids = {
+                    tc.get("id", "") for tc in msg["tool_calls"] if isinstance(tc, dict)
+                }
+                result.append(msg)
+            elif role == "tool":
+                tc_id = msg.get("tool_call_id", "")
+                if tc_id in pending_tool_call_ids:
+                    result.append(msg)
+                    pending_tool_call_ids.discard(tc_id)
+                # else: orphaned tool message, skip it
+            else:
+                pending_tool_call_ids = set()
+                result.append(msg)
+        return result
+
+    async def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
+        system_prompt = await self.context_builder.abuild_system_prompt(
+            user_message=user_text
+        )
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(history)
         messages.append({"role": "user", "content": user_text})
@@ -94,10 +122,24 @@ class AgentLoop:
                 )
         try:
             params = json.loads(arguments)
+
+            # before_tool hook: allows parameter modification
+            if self.hook_registry.has_handlers("before_tool"):
+                hook_result = await self.hook_registry.call_with_result(
+                    "before_tool", tool_name=name, params=params
+                )
+                params = hook_result.get("params", params)
+
             result = await tool.execute(params)
             max_chars = self.config.tools.tool_result_max_chars
             if len(result) > max_chars:
                 result = result[:max_chars] + "\n...(truncated)"
+
+            # after_tool hook: notification only
+            await self.hook_registry.call(
+                "after_tool", tool_name=name, params=params, result=result
+            )
+
             return result
         except json.JSONDecodeError:
             return f"Error: invalid JSON arguments for tool '{name}'"
@@ -112,16 +154,31 @@ class AgentLoop:
         initial_history_len = len(history)
         max_iterations = max(1, self.config.agent.max_iterations)
 
-        messages = self._build_messages(history, inbound.text)
+        messages = await self._build_messages(history, inbound.text)
         tools = self.tool_registry.to_openai_tools() or None
 
-        logger.info(f"Agent processing: session={session_key}, user={inbound.username}")
+        # Model routing: classify user intent and select appropriate model
+        from mindclaw.llm.classifier import classify_intent
+
+        category = classify_intent(inbound.text)
+        routed_model = self.router.resolve_model_for_task(category)
+        # Only pass explicit model when routing selects non-default,
+        # so the fallback mechanism in LLMRouter.chat() remains active.
+        use_model: str | None = None
+        if routed_model != self.config.agent.default_model:
+            use_model = routed_model
+        logger.info(
+            f"Agent processing: session={session_key}, user={inbound.username}, "
+            f"category={category}, model={routed_model}"
+        )
 
         try:
             iteration = 0
             while iteration < max_iterations:
                 iteration += 1
-                result = await self.router.chat(messages=messages, tools=tools)
+                result = await self.router.chat(
+                    messages=messages, tools=tools, model=use_model,
+                )
 
                 if not result.tool_calls:
                     reply_text = result.content or "(no response)"

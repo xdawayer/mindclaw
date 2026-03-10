@@ -1,0 +1,30 @@
+# MindClaw systemd service file (Linux)
+# Install: sudo cp mindclaw.service /etc/systemd/system/
+# Enable:  sudo systemctl enable mindclaw && sudo systemctl start mindclaw
+# Logs:    journalctl -u mindclaw -f
+
+[Unit]
+Description=MindClaw Personal AI Assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=%h/mindclaw
+ExecStart=%h/.local/bin/uv run mindclaw serve --gateway --telegram
+Restart=on-failure
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mindclaw
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/mindclaw/data %h/mindclaw/logs
+
+[Install]
+WantedBy=multi-user.target

@@ -6,4 +6,4 @@
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
 | `events.py` | 核心 | InboundMessage / OutboundMessage 数据类 |
-| `queue.py` | 核心 | MessageBus 双队列实现 |
+| `queue.py` | 核心 | MessageBus 双队列实现，含消息去重 (5s 窗口) 和限流 (每 session 30条/分钟) |

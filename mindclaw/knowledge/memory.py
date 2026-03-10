@@ -1,6 +1,6 @@
 # input: knowledge/session.py, llm/router.py, config/schema.py
 # output: 导出 MemoryManager
-# pos: LLM 驱动的记忆整合，管理 MEMORY.md 和 HISTORY.md
+# pos: LLM 驱动的记忆整合，管理 MEMORY.md 和 HISTORY.md，含 append_memory + search_keyword
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 """LLM-driven memory consolidation for MindClaw.
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -23,7 +24,8 @@ from mindclaw.llm.router import LLMRouter
 _CONSOLIDATION_PROMPT = """\
 You are a memory manager for MindClaw, a personal AI assistant.
 
-Your task: Extract important information from the conversation below and merge it with existing memory.
+Your task: Extract important information from the conversation below
+and merge it with existing memory.
 
 ## Existing Memory
 {existing_memory}
@@ -33,7 +35,7 @@ Your task: Extract important information from the conversation below and merge i
 
 ## Instructions
 1. Extract facts worth remembering long-term: user preferences, key facts, important decisions.
-2. Merge with existing memory: keep what's still relevant, remove what's outdated, add new information.
+2. Merge with existing memory: keep what's still relevant, remove outdated, add new.
 3. Output the complete updated memory in this exact Markdown format:
 
 # MindClaw Memory
@@ -55,11 +57,16 @@ class MemoryManager:
     """Consolidate conversation history into MEMORY.md and HISTORY.md via LLM."""
 
     def __init__(
-        self, data_dir: Path, router: LLMRouter, config: MindClawConfig
+        self,
+        data_dir: Path,
+        router: LLMRouter,
+        config: MindClawConfig,
+        vector_store: Any | None = None,
     ) -> None:
         self._data_dir = data_dir
         self._router = router
         self._config = config
+        self._vector_store = vector_store
 
     # ------------------------------------------------------------------
     # Public API
@@ -114,6 +121,17 @@ class MemoryManager:
         new_pointer = len(all_messages) - keep_recent
         session_store.mark_consolidated(session_key, pointer=new_pointer)
 
+        # 8. Index in vector store if available
+        if self._vector_store is not None:
+            try:
+                await self._vector_store.index_memory(new_memory)
+                history_path = self._data_dir / "HISTORY.md"
+                if history_path.exists():
+                    history_text = history_path.read_text(encoding="utf-8")
+                    await self._vector_store.index_history(history_text)
+            except Exception:
+                logger.warning("Vector indexing after consolidation failed")
+
         logger.info(
             f"Consolidated {len(to_consolidate)} messages for {session_key}"
         )
@@ -129,6 +147,42 @@ class MemoryManager:
         if not memory_path.exists():
             return ""
         return memory_path.read_text(encoding="utf-8")
+
+    def append_memory(self, content: str, category: str = "fact") -> None:
+        """Append a single memory entry to MEMORY.md (direct file op, no LLM)."""
+        memory_path = self._data_dir / "MEMORY.md"
+
+        if not memory_path.exists() or memory_path.stat().st_size == 0:
+            header = "# MindClaw Memory\n\n"
+        else:
+            header = ""
+
+        category_label = {
+            "preference": "用户偏好",
+            "fact": "关键事实",
+            "decision": "重要决定",
+        }.get(category, "关键事实")
+
+        entry = f"- [{category_label}] {content}\n"
+
+        with memory_path.open("a", encoding="utf-8") as fh:
+            fh.write(header + entry)
+
+    def search_keyword(self, query: str) -> list[dict]:
+        """Keyword search across MEMORY.md and HISTORY.md. Returns matching lines."""
+        results: list[dict] = []
+        query_lower = query.lower()
+
+        for filename in ("MEMORY.md", "HISTORY.md"):
+            filepath = self._data_dir / filename
+            if not filepath.exists():
+                continue
+            for line in filepath.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if stripped and query_lower in stripped.lower():
+                    results.append({"source": filename, "text": stripped})
+
+        return results
 
     # ------------------------------------------------------------------
     # Internal helpers

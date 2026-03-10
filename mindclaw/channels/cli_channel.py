@@ -1,4 +1,4 @@
-# input: channels/base.py, bus/events.py, prompt_toolkit
+# input: channels/base.py, bus/events.py, prompt_toolkit, rich
 # output: 导出 CLIChannel
 # pos: CLI 渠道实现，本地终端交互
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -9,7 +9,7 @@ import os
 from rich.console import Console
 from rich.markdown import Markdown
 
-from mindclaw.bus.events import InboundMessage
+from mindclaw.bus.events import OutboundMessage
 from mindclaw.bus.queue import MessageBus
 
 from .base import BaseChannel
@@ -19,19 +19,22 @@ console = Console()
 
 class CLIChannel(BaseChannel):
     def __init__(self, bus: MessageBus) -> None:
-        super().__init__(bus)
+        super().__init__(name="cli", bus=bus, allow_from=None)
         self._running = False
         self._stop_event: asyncio.Event | None = None
 
     async def _handle_input(self, text: str) -> None:
-        msg = InboundMessage(
-            channel="cli",
+        await self._handle_message(
+            text=text,
             chat_id="local",
             user_id=os.getenv("USER", "user"),
             username=os.getenv("USER", "user"),
-            text=text,
         )
-        await self.bus.put_inbound(msg)
+
+    async def send(self, msg: OutboundMessage) -> None:
+        console.print()
+        console.print(Markdown(msg.text))
+        console.print()
 
     async def _input_loop(self) -> None:
         from prompt_toolkit import PromptSession
@@ -66,9 +69,7 @@ class CLIChannel(BaseChannel):
                 task.cancel()
             if get_task in done:
                 msg = get_task.result()
-                console.print()
-                console.print(Markdown(msg.text))
-                console.print()
+                await self.send(msg)
 
     async def start(self) -> None:
         self._running = True

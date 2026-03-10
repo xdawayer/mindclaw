@@ -1,15 +1,16 @@
-# input: tools/base.py, httpx, ipaddress, socket
+# input: tools/base.py, httpx, ipaddress, socket, knowledge/_text_utils.py
 # output: 导出 WebSearchTool, WebFetchTool
 # pos: 网页搜索和抓取工具，含 SSRF 防护
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import ipaddress
-import re
 import socket
 from urllib.parse import urljoin, urlparse
 
 import httpx
 from loguru import logger
+
+from mindclaw.knowledge._text_utils import html_to_text
 
 from .base import RiskLevel, Tool
 
@@ -38,14 +39,6 @@ def _is_safe_url(url: str) -> bool:
         return True
     except (socket.gaierror, ValueError, OSError):
         return False
-
-
-def _html_to_text(html: str) -> str:
-    text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
 
 
 class WebFetchTool(Tool):
@@ -98,7 +91,7 @@ class WebFetchTool(Tool):
                 charset = content_type.split("charset=")[-1].split(";")[0].strip()
             text_content = bytes(body).decode(charset, errors="replace")
             if "text/html" in content_type:
-                text = _html_to_text(text_content)
+                text = html_to_text(text_content)
             else:
                 text = text_content
             if len(text) > self.max_chars:
@@ -110,7 +103,7 @@ class WebFetchTool(Tool):
 
 class WebSearchTool(Tool):
     name = "web_search"
-    description = "Search the web using Brave Search API."
+    description = "Search the web using Tavily Search API."
     parameters = {
         "type": "object",
         "properties": {
@@ -131,26 +124,27 @@ class WebSearchTool(Tool):
             return "Error: web search API key not configured"
         logger.info(f"Searching: {query}")
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(
-                    "https://api.search.brave.com/res/v1/web/search",
-                    params={"q": query, "count": count},
-                    headers={
-                        "Accept": "application/json",
-                        "X-Subscription-Token": self.api_key,
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    "https://api.tavily.com/search",
+                    json={
+                        "api_key": self.api_key,
+                        "query": query,
+                        "max_results": count,
+                        "include_answer": False,
                     },
                 )
             if resp.status_code != 200:
                 return f"Error: search API returned HTTP {resp.status_code}"
             data = resp.json()
-            results = data.get("web", {}).get("results", [])
+            results = data.get("results", [])
             if not results:
                 return "No results found."
             lines = []
             for r in results:
                 lines.append(f"**{r['title']}**")
                 lines.append(f"  URL: {r['url']}")
-                lines.append(f"  {r.get('description', '')}")
+                lines.append(f"  {r.get('content', '')[:200]}")
                 lines.append("")
             return "\n".join(lines).strip()
         except Exception as e:

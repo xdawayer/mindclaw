@@ -15,6 +15,7 @@ dist/
 
 # Config (含敏感信息)
 config.json
+.env
 
 # OS
 .DS_Store

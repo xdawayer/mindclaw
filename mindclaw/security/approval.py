@@ -1,6 +1,6 @@
 # input: bus/queue.py, bus/events.py, asyncio, uuid, time
 # output: 导出 ApprovalManager
-# pos: 安全层审批工作流，DANGEROUS 工具执行前的用户确认机制
+# pos: 安全层审批工作流，DANGEROUS 工具执行前的用户确认机制（按 channel+chat_id 精确匹配）
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
@@ -48,8 +48,12 @@ class ApprovalManager:
     def has_pending(self) -> bool:
         return self._pending is not None
 
-    def is_approval_reply(self, text: str) -> bool:
+    def is_approval_reply(self, text: str, channel: str = "", chat_id: str = "") -> bool:
         if self._pending is None:
+            return False
+        if channel and self._pending.channel != channel:
+            return False
+        if chat_id and self._pending.chat_id != chat_id:
             return False
         return text.strip().lower() in _ALL_REPLY_WORDS
 

@@ -1,158 +1,270 @@
-# input: typer, channels/, orchestrator/, llm/, config/, tools/*, security/approval, knowledge/*
+# input: typer, app.py, config/loader.py, security/crypto.py, oauth/
 # output: 导出 app (Typer 应用)
-# pos: CLI 入口，用户通过 typer 命令启动 MindClaw
+# pos: CLI 入口，chat/serve/secret/auth 命令
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
 from pathlib import Path
 
 import typer
-from loguru import logger
 from rich.console import Console
 
-from mindclaw.bus.queue import MessageBus
-from mindclaw.channels.cli_channel import CLIChannel
 from mindclaw.config.loader import load_config
-from mindclaw.knowledge.memory import MemoryManager
-from mindclaw.knowledge.session import SessionStore
-from mindclaw.llm.router import LLMRouter
-from mindclaw.orchestrator.agent_loop import AgentLoop
-from mindclaw.orchestrator.context import ContextBuilder
-from mindclaw.security.approval import ApprovalManager
-from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
-from mindclaw.tools.registry import ToolRegistry
-from mindclaw.tools.shell import ExecTool
-from mindclaw.tools.web import WebFetchTool, WebSearchTool
 
 app = typer.Typer(name="mindclaw", help="MindClaw - Personal AI Assistant")
 console = Console()
-
-
-async def _run_chat(config_path: Path | None) -> None:
-    config = load_config(config_path)
-
-    # 配置 loguru
-    logger.remove()
-    logger.add(
-        config.log.file,
-        level=config.log.level,
-        rotation=config.log.rotation,
-        retention=config.log.retention,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level:<7} | {message}",
-    )
-
-    bus = MessageBus()
-    router = LLMRouter(config)
-
-    # 注册所有工具
-    workspace = Path.cwd()
-    registry = ToolRegistry()
-    registry.register(ReadFileTool(workspace=workspace))
-    registry.register(WriteFileTool(workspace=workspace))
-    registry.register(EditFileTool(workspace=workspace))
-    registry.register(ListDirTool(workspace=workspace))
-    registry.register(ExecTool(workspace=workspace, timeout=config.tools.exec_timeout))
-    registry.register(WebFetchTool())
-
-    brave_settings = config.providers.get("brave")
-    if brave_settings and brave_settings.api_key:
-        registry.register(WebSearchTool(api_key=brave_settings.api_key))
-
-    # 创建知识层组件
-    data_dir = Path(config.knowledge.data_dir)
-    session_store = SessionStore(data_dir=data_dir)
-    memory_manager = MemoryManager(data_dir=data_dir, router=router, config=config)
-    context_builder = ContextBuilder(memory_manager=memory_manager)
-
-    # 创建审批管理器
-    approval_manager = ApprovalManager(
-        bus=bus,
-        timeout=config.security.approval_timeout,
-    )
-
-    agent = AgentLoop(
-        config=config,
-        bus=bus,
-        router=router,
-        tool_registry=registry,
-        approval_manager=approval_manager,
-        session_store=session_store,
-        memory_manager=memory_manager,
-        context_builder=context_builder,
-    )
-
-    channel = CLIChannel(bus=bus)
-
-    agent_task: asyncio.Task | None = None
-
-    async def _process_message(msg):
-        try:
-            await agent.handle_message(msg)
-        except Exception:
-            logger.exception("Agent error")
-            from mindclaw.bus.events import OutboundMessage
-
-            await bus.put_outbound(
-                OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    text="An internal error occurred. Please try again.",
-                )
-            )
-
-    async def message_router():
-        nonlocal agent_task
-        while True:
-            msg = await bus.get_inbound()
-
-            # Route approval replies to ApprovalManager
-            if approval_manager.has_pending() and approval_manager.is_approval_reply(
-                msg.text
-            ):
-                approval_manager.resolve(msg.text)
-                continue
-
-            # During pending approval, drop non-approval messages to avoid
-            # blocking the router (which would deadlock the approval flow).
-            if approval_manager.has_pending():
-                logger.debug(
-                    f"Ignoring non-approval message during pending approval: "
-                    f"{msg.text[:50]}"
-                )
-                continue
-
-            # Wait for previous agent processing to finish
-            if agent_task is not None and not agent_task.done():
-                try:
-                    await agent_task
-                except Exception:
-                    pass  # Error already handled inside _process_message
-
-            agent_task = asyncio.create_task(_process_message(msg))
-
-    router_task = asyncio.create_task(message_router())
-
-    try:
-        await channel.start()
-    finally:
-        router_task.cancel()
-        if agent_task and not agent_task.done():
-            agent_task.cancel()
-        for t in [router_task, agent_task]:
-            if t:
-                try:
-                    await t
-                except asyncio.CancelledError:
-                    pass
-        await channel.stop()
 
 
 @app.command()
 def chat(
     config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
 ) -> None:
-    """Start an interactive chat session."""
-    asyncio.run(_run_chat(config))
+    """Start an interactive CLI chat session."""
+    from mindclaw.app import MindClawApp
+
+    cfg = load_config(config)
+    mindclaw_app = MindClawApp(cfg)
+    asyncio.run(mindclaw_app.run(["cli"]))
+
+
+@app.command()
+def serve(
+    config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+    channels: str = typer.Option(
+        "gateway,telegram",
+        "--channels",
+        help="Comma-separated channel names (e.g. gateway,slack,telegram)",
+    ),
+) -> None:
+    """Start Gateway + remote channels."""
+    from mindclaw.app import MindClawApp
+
+    cfg = load_config(config)
+    channel_list = [ch.strip() for ch in channels.split(",") if ch.strip()]
+    mindclaw_app = MindClawApp(cfg)
+    asyncio.run(mindclaw_app.run(channel_list))
+
+
+@app.command("secret-set")
+def secret_set(
+    name: str = typer.Argument(help="Secret name"),
+    value: str = typer.Argument(help="Secret value"),
+    config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+) -> None:
+    """Store an encrypted secret."""
+    from mindclaw.security.crypto import SecretStore
+
+    cfg = load_config(config)
+    data_dir = Path(cfg.knowledge.data_dir)
+    store = SecretStore(
+        store_path=data_dir / "secrets.enc",
+        master_key_path=data_dir / "master.key",
+    )
+    store.init_or_load_key()
+    store.set(name, value)
+    console.print(f"Secret '{name}' stored.")
+
+
+@app.command("secret-list")
+def secret_list(
+    config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+) -> None:
+    """List all stored secret names."""
+    from mindclaw.security.crypto import SecretStore
+
+    cfg = load_config(config)
+    data_dir = Path(cfg.knowledge.data_dir)
+    store = SecretStore(
+        store_path=data_dir / "secrets.enc",
+        master_key_path=data_dir / "master.key",
+    )
+    store.init_or_load_key()
+    keys = store.list_keys()
+    if not keys:
+        console.print("No secrets stored.")
+    else:
+        for k in keys:
+            console.print(f"  {k}")
+
+
+@app.command("secret-delete")
+def secret_delete(
+    name: str = typer.Argument(help="Secret name to delete"),
+    config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+) -> None:
+    """Delete a stored secret."""
+    from mindclaw.security.crypto import SecretStore
+
+    cfg = load_config(config)
+    data_dir = Path(cfg.knowledge.data_dir)
+    store = SecretStore(
+        store_path=data_dir / "secrets.enc",
+        master_key_path=data_dir / "master.key",
+    )
+    store.init_or_load_key()
+    store.delete(name)
+    console.print(f"Secret '{name}' deleted.")
+
+
+@app.command("auth-login")
+def auth_login(
+    provider: str = typer.Argument(help="OAuth provider (e.g. openai)"),
+    config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+) -> None:
+    """Login to an LLM provider via OAuth (opens browser)."""
+    from mindclaw.oauth.manager import OAuthManager
+    from mindclaw.oauth.providers import OAUTH_PROVIDERS
+    from mindclaw.oauth.token_store import OAuthTokenStore
+
+    if provider not in OAUTH_PROVIDERS:
+        console.print(f"Unknown OAuth provider: '{provider}'")
+        console.print(f"Available: {', '.join(OAUTH_PROVIDERS.keys())}")
+        raise typer.Exit(1)
+
+    cfg = load_config(config)
+    data_dir = Path(cfg.knowledge.data_dir)
+    token_store = OAuthTokenStore(
+        store_path=data_dir / "oauth_tokens.enc",
+        master_key_path=data_dir / "master.key",
+    )
+    token_store.init_or_load_key()
+    manager = OAuthManager(token_store=token_store)
+
+    url, state, verifier = manager.build_authorization_url(provider)
+
+    console.print(f"\nOpening browser for {provider} OAuth login...")
+    console.print(f"If browser doesn't open, visit:\n{url}\n")
+
+    import webbrowser
+
+    webbrowser.open(url)
+
+    # Start local callback server to receive the authorization code
+    asyncio.run(_wait_for_callback(manager, provider, state, verifier))
+
+
+async def _wait_for_callback(
+    manager, provider: str, expected_state: str, verifier: str
+) -> None:
+    """Start a temporary HTTP server to receive OAuth callback."""
+    from mindclaw.oauth.providers import OAUTH_PROVIDERS
+
+    port = OAUTH_PROVIDERS[provider].redirect_port
+    code_future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+
+    async def handle_callback(reader, writer):
+        try:
+            data = await asyncio.wait_for(reader.read(4096), timeout=30)
+        except asyncio.TimeoutError:
+            writer.close()
+            return
+        request_line = data.decode().split("\r\n")[0]
+        # Parse: GET /auth/callback?code=xxx&state=yyy HTTP/1.1
+        path = request_line.split(" ")[1] if " " in request_line else ""
+        from urllib.parse import parse_qs, urlparse
+
+        parsed = urlparse(path)
+        params = parse_qs(parsed.query)
+
+        code = params.get("code", [None])[0]
+        state = params.get("state", [None])[0]
+
+        if code and state == expected_state:
+            body = "<html><body><h2>Authorization successful! You can close this tab.</h2></body></html>"
+            response = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Content-Type: text/html\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                f"Connection: close\r\n\r\n{body}"
+            )
+            writer.write(response.encode())
+            await writer.drain()
+            writer.close()
+            if not code_future.done():
+                code_future.set_result(code)
+        else:
+            body = "<html><body><h2>Authorization failed. State mismatch or missing code.</h2></body></html>"
+            response = (
+                f"HTTP/1.1 400 Bad Request\r\n"
+                f"Content-Type: text/html\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                f"Connection: close\r\n\r\n{body}"
+            )
+            writer.write(response.encode())
+            await writer.drain()
+            writer.close()
+            if not code_future.done():
+                code_future.set_exception(ValueError("State mismatch or missing code"))
+
+    server = await asyncio.start_server(handle_callback, "127.0.0.1", port)
+    console.print(f"Waiting for callback on http://127.0.0.1:{port}/auth/callback ...")
+
+    try:
+        code = await asyncio.wait_for(code_future, timeout=120)
+    except asyncio.TimeoutError:
+        console.print("Timeout waiting for authorization callback.")
+        raise typer.Exit(1)
+    finally:
+        server.close()
+        await server.wait_closed()
+
+    token_info = await manager.exchange_code(provider, code, verifier)
+    console.print(f"\nLogged in to {provider} successfully!")
+    console.print(f"Token expires at: {token_info.expires_at}")
+
+
+@app.command("auth-status")
+def auth_status(
+    config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+) -> None:
+    """Show OAuth token status for all providers."""
+    import time
+
+    from mindclaw.oauth.token_store import OAuthTokenStore
+
+    cfg = load_config(config)
+    data_dir = Path(cfg.knowledge.data_dir)
+    token_store = OAuthTokenStore(
+        store_path=data_dir / "oauth_tokens.enc",
+        master_key_path=data_dir / "master.key",
+    )
+    token_store.init_or_load_key()
+    providers = token_store.list_providers()
+
+    if not providers:
+        console.print("No OAuth tokens stored.")
+        return
+
+    for p in providers:
+        token = token_store.get_token(p)
+        if token is None:
+            continue
+        expired = token.is_expired(buffer_seconds=0)
+        status = "EXPIRED" if expired else "VALID"
+        remaining = ""
+        if token.expires_at:
+            secs = int(token.expires_at - time.time())
+            remaining = f" ({secs}s remaining)" if secs > 0 else ""
+        console.print(f"  {p}: {status}{remaining}")
+
+
+@app.command("auth-logout")
+def auth_logout(
+    provider: str = typer.Argument(help="OAuth provider to logout from"),
+    config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+) -> None:
+    """Remove OAuth token for a provider."""
+    from mindclaw.oauth.token_store import OAuthTokenStore
+
+    cfg = load_config(config)
+    data_dir = Path(cfg.knowledge.data_dir)
+    token_store = OAuthTokenStore(
+        store_path=data_dir / "oauth_tokens.enc",
+        master_key_path=data_dir / "master.key",
+    )
+    token_store.init_or_load_key()
+    token_store.delete_token(provider)
+    console.print(f"Logged out from {provider}.")
 
 
 @app.command()
