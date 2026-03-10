@@ -1,6 +1,6 @@
-# input: slack-sdk, channels/base.py, bus/events.py, channels/slack_format.py
+# input: slack-sdk, channels/base.py, bus/events.py
 # output: 导出 SlackChannel
-# pos: Slack 渠道实现，使用 Socket Mode (WebSocket) 接收消息，发送时自动转换 Markdown → Slack mrkdwn
+# pos: Slack 渠道实现，使用 Socket Mode (WebSocket) 接收消息，通过 Block Kit markdown block 发送
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
@@ -11,7 +11,9 @@ from mindclaw.bus.events import OutboundMessage
 from mindclaw.bus.queue import MessageBus
 
 from .base import BaseChannel
-from .slack_format import markdown_to_slack
+
+# Slack markdown block max chars
+_MARKDOWN_BLOCK_MAX = 12000
 
 
 class SlackChannel(BaseChannel):
@@ -50,17 +52,33 @@ class SlackChannel(BaseChannel):
         if self._web_client and self._web_client.session:
             await self._web_client.session.close()
 
+    @staticmethod
+    def _build_blocks(text: str) -> list[dict]:
+        """Split text into markdown blocks (max 12000 chars each)."""
+        if len(text) <= _MARKDOWN_BLOCK_MAX:
+            return [{"type": "markdown", "text": text}]
+        blocks: list[dict] = []
+        remaining = text
+        while remaining:
+            chunk = remaining[:_MARKDOWN_BLOCK_MAX]
+            remaining = remaining[_MARKDOWN_BLOCK_MAX:]
+            blocks.append({"type": "markdown", "text": chunk})
+        return blocks
+
     async def send(self, msg: OutboundMessage) -> None:
         if self._web_client is None:
             logger.warning("SlackChannel.send() called but web_client is not initialized")
             return
-        text = markdown_to_slack(msg.text)
+        blocks = self._build_blocks(msg.text)
+        # text= is required as fallback for notifications/search
+        plain_fallback = msg.text[:300] if len(msg.text) > 300 else msg.text
         last_err: Exception | None = None
         for attempt in range(3):
             try:
                 await self._web_client.chat_postMessage(
                     channel=msg.chat_id,
-                    text=text,
+                    text=plain_fallback,
+                    blocks=blocks,
                 )
                 return
             except Exception as exc:
