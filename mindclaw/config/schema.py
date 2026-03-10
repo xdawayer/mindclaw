@@ -5,7 +5,16 @@
 # pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+class ModelRoutingConfig(BaseModel):
+    enabled: bool = False
+    categories: dict[str, str] = Field(default_factory=dict)
+
+    model_config = {"populate_by_name": True}
 
 
 class AgentConfig(BaseModel):
@@ -13,6 +22,9 @@ class AgentConfig(BaseModel):
     fallback_model: str = Field(default="gpt-4o", alias="fallbackModel")
     max_iterations: int = Field(default=40, alias="maxIterations")
     subagent_max_iterations: int = Field(default=15, alias="subagentMaxIterations")
+    model_routing: ModelRoutingConfig = Field(
+        default_factory=ModelRoutingConfig, alias="modelRouting"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -40,6 +52,7 @@ class GatewayConfig(BaseModel):
 class ProviderSettings(BaseModel):
     api_key: str = Field(default="", alias="apiKey")
     api_base: str | None = Field(default=None, alias="apiBase")
+    auth_type: Literal["api_key", "oauth"] = Field(default="api_key", alias="authType")
 
     model_config = {"populate_by_name": True}
 

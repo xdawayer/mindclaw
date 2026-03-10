@@ -157,13 +157,28 @@ class AgentLoop:
         messages = await self._build_messages(history, inbound.text)
         tools = self.tool_registry.to_openai_tools() or None
 
-        logger.info(f"Agent processing: session={session_key}, user={inbound.username}")
+        # Model routing: classify user intent and select appropriate model
+        from mindclaw.llm.classifier import classify_intent
+
+        category = classify_intent(inbound.text)
+        routed_model = self.router.resolve_model_for_task(category)
+        # Only pass explicit model when routing selects non-default,
+        # so the fallback mechanism in LLMRouter.chat() remains active.
+        use_model: str | None = None
+        if routed_model != self.config.agent.default_model:
+            use_model = routed_model
+        logger.info(
+            f"Agent processing: session={session_key}, user={inbound.username}, "
+            f"category={category}, model={routed_model}"
+        )
 
         try:
             iteration = 0
             while iteration < max_iterations:
                 iteration += 1
-                result = await self.router.chat(messages=messages, tools=tools)
+                result = await self.router.chat(
+                    messages=messages, tools=tools, model=use_model,
+                )
 
                 if not result.tool_calls:
                     reply_text = result.content or "(no response)"

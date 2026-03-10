@@ -3,6 +3,8 @@
 # pos: Slack 渠道实现，使用 Socket Mode (WebSocket) 接收消息，发送时自动转换 Markdown → Slack mrkdwn
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
+import asyncio
+
 from loguru import logger
 
 from mindclaw.bus.events import OutboundMessage
@@ -50,13 +52,27 @@ class SlackChannel(BaseChannel):
         if self._web_client is None:
             logger.warning("SlackChannel.send() called but web_client is not initialized")
             return
-        try:
-            await self._web_client.chat_postMessage(
-                channel=msg.chat_id,
-                text=markdown_to_slack(msg.text),
-            )
-        except Exception:
-            logger.exception(f"Failed to send Slack message to channel {msg.chat_id}")
+        text = markdown_to_slack(msg.text)
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                await self._web_client.chat_postMessage(
+                    channel=msg.chat_id,
+                    text=text,
+                )
+                return
+            except Exception as exc:
+                last_err = exc
+                logger.warning(
+                    f"Slack send attempt {attempt + 1}/3 failed for "
+                    f"channel {msg.chat_id}: {exc}"
+                )
+                if attempt < 2:
+                    await asyncio.sleep(1 * (attempt + 1))
+        logger.exception(
+            f"Failed to send Slack message to channel {msg.chat_id} "
+            f"after 3 attempts: {last_err}"
+        )
 
     async def _on_socket_event(self, client, req) -> None:
         from slack_sdk.socket_mode.response import SocketModeResponse

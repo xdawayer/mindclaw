@@ -46,7 +46,10 @@ class MindClawApp:
     def __init__(self, config: MindClawConfig) -> None:
         self.config = config
         self.bus = MessageBus()
-        self.router = LLMRouter(config)
+
+        # Initialize OAuth if any provider uses it
+        self._oauth_manager = self._init_oauth(config)
+        self.router = LLMRouter(config, oauth_manager=self._oauth_manager)
         self.channel_manager = ChannelManager(self.bus)
         self.tool_registry = ToolRegistry()
         self.hook_registry = HookRegistry()
@@ -243,6 +246,26 @@ class MindClawApp:
         )
         self.channel_manager.register(GatewayChannel(bus=self.bus, server=server))
 
+    @staticmethod
+    def _init_oauth(config: MindClawConfig):
+        """Initialize OAuthManager if any provider uses OAuth auth."""
+        has_oauth = any(
+            s.auth_type == "oauth" for s in config.providers.values()
+        )
+        if not has_oauth:
+            return None
+
+        from mindclaw.oauth.manager import OAuthManager
+        from mindclaw.oauth.token_store import OAuthTokenStore
+
+        data_dir = Path(config.knowledge.data_dir)
+        token_store = OAuthTokenStore(
+            store_path=data_dir / "oauth_tokens.enc",
+            master_key_path=data_dir / "master.key",
+        )
+        token_store.init_or_load_key()
+        return OAuthManager(token_store=token_store)
+
     def _setup_telegram(self) -> None:
         from mindclaw.channels.telegram import TelegramChannel
 
@@ -345,20 +368,35 @@ class MindClawApp:
             await self.agent_loop.handle_message(msg)
         except Exception as exc:
             logger.exception("Agent error")
-            # on_error hook
-            await self.hook_registry.call(
-                "on_error",
-                error=str(exc),
-                channel=msg.channel,
-                chat_id=msg.chat_id,
-            )
-            await self.bus.put_outbound(
-                OutboundMessage(
+            try:
+                # on_error hook
+                await self.hook_registry.call(
+                    "on_error",
+                    error=str(exc),
                     channel=msg.channel,
                     chat_id=msg.chat_id,
-                    text="An internal error occurred. Please try again.",
                 )
-            )
+            except Exception:
+                logger.exception("on_error hook failed")
+            try:
+                await self.bus.put_outbound(
+                    OutboundMessage(
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
+                        text="An internal error occurred. Please try again.",
+                    )
+                )
+            except Exception:
+                logger.exception("Failed to send error reply to user")
+
+    @staticmethod
+    def _task_done_callback(task: asyncio.Task) -> None:
+        """Log unhandled exceptions from agent tasks to prevent silent failures."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error(f"Agent task failed with unhandled exception: {exc}")
 
     async def _message_router(self) -> None:
         while True:
@@ -389,6 +427,7 @@ class MindClawApp:
                     pass
 
             self._agent_task = asyncio.create_task(self._process_message(msg))
+            self._agent_task.add_done_callback(self._task_done_callback)
 
     async def _outbound_router(self) -> None:
         while True:
