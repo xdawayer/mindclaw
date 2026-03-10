@@ -65,3 +65,19 @@ class TestMarkdownToSlack:
         md = "```\n**not bold** and *not italic*\n```"
         result = markdown_to_slack(md)
         assert "**not bold**" in result
+
+    def test_cjk_bold_gets_zwsp(self):
+        """Bold formatting adjacent to CJK should get zero-width space fix."""
+        result = markdown_to_slack("**粗体**文字")
+        # ZWS inserted between * and CJK: *\u200b粗体\u200b*\u200b文字
+        assert "\u200b" in result
+        assert "粗体" in result
+        assert result.count("*") >= 2  # bold markers present
+
+    def test_cjk_italic_gets_zwsp(self):
+        """Italic adjacent to CJK should get zero-width space fix."""
+        result = markdown_to_slack("*斜体*文字")
+        # ZWS inserted between _ and CJK: _\u200b斜体\u200b_\u200b文字
+        assert "\u200b" in result
+        assert "斜体" in result
+        assert "_" in result  # italic marker present
