@@ -11,9 +11,10 @@ from mindclaw.bus.events import OutboundMessage
 from mindclaw.bus.queue import MessageBus
 
 from .base import BaseChannel
+from .slack_format import markdown_to_slack
 
-# Slack markdown block max chars
-_MARKDOWN_BLOCK_MAX = 12000
+# Slack section block text limit (3000 chars per text object)
+_SECTION_TEXT_MAX = 3000
 
 
 class SlackChannel(BaseChannel):
@@ -54,15 +55,20 @@ class SlackChannel(BaseChannel):
 
     @staticmethod
     def _build_blocks(text: str) -> list[dict]:
-        """Split text into markdown blocks (max 12000 chars each)."""
-        if len(text) <= _MARKDOWN_BLOCK_MAX:
-            return [{"type": "markdown", "text": text}]
+        """Convert text to Slack section blocks with mrkdwn formatting.
+
+        Slack section text objects have a 3000-char limit, so long messages
+        are split into multiple section blocks.
+        """
+        mrkdwn = markdown_to_slack(text)
+        if len(mrkdwn) <= _SECTION_TEXT_MAX:
+            return [{"type": "section", "text": {"type": "mrkdwn", "text": mrkdwn}}]
         blocks: list[dict] = []
-        remaining = text
+        remaining = mrkdwn
         while remaining:
-            chunk = remaining[:_MARKDOWN_BLOCK_MAX]
-            remaining = remaining[_MARKDOWN_BLOCK_MAX:]
-            blocks.append({"type": "markdown", "text": chunk})
+            chunk = remaining[:_SECTION_TEXT_MAX]
+            remaining = remaining[_SECTION_TEXT_MAX:]
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk}})
         return blocks
 
     async def send(self, msg: OutboundMessage) -> None:

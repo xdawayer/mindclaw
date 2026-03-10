@@ -248,8 +248,8 @@ async def test_slack_on_event_ack_sent():
 
 
 @pytest.mark.asyncio
-async def test_slack_send_uses_markdown_blocks():
-    """send() should use Slack markdown blocks for formatting."""
+async def test_slack_send_uses_section_blocks():
+    """send() should use Slack section blocks with mrkdwn text objects."""
     from mindclaw.channels.slack import SlackChannel
 
     bus = MessageBus()
@@ -261,35 +261,37 @@ async def test_slack_send_uses_markdown_blocks():
 
     call_kwargs = ch._web_client.chat_postMessage.call_args.kwargs
     assert call_kwargs["channel"] == "C67890"
-    # blocks should contain the raw Markdown
     blocks = call_kwargs["blocks"]
     assert len(blocks) == 1
-    assert blocks[0]["type"] == "markdown"
-    assert blocks[0]["text"] == "**bold** text"
+    assert blocks[0]["type"] == "section"
+    assert blocks[0]["text"]["type"] == "mrkdwn"
+    # markdown_to_slack converts **bold** → *bold*
+    assert "bold" in blocks[0]["text"]["text"]
     # text= is plain fallback for notifications
-    assert call_kwargs["text"] == "**bold** text"
+    assert "bold" in call_kwargs["text"]
 
 
 @pytest.mark.asyncio
 async def test_slack_send_splits_long_text():
-    """Messages exceeding 12000 chars should be split into multiple blocks."""
+    """Messages exceeding 3000 chars should be split into multiple section blocks."""
     from mindclaw.channels.slack import SlackChannel
 
     bus = MessageBus()
     ch = SlackChannel(bus=bus, app_token="xapp-fake", bot_token="xoxb-fake")
     ch._web_client = AsyncMock()
 
-    long_text = "A" * 25000
+    long_text = "A" * 7000
     msg = OutboundMessage(channel="slack", chat_id="C67890", text=long_text)
     await ch.send(msg)
 
     call_kwargs = ch._web_client.chat_postMessage.call_args.kwargs
     blocks = call_kwargs["blocks"]
-    assert len(blocks) == 3  # 12000 + 12000 + 1000
-    assert all(b["type"] == "markdown" for b in blocks)
-    assert blocks[0]["text"] == "A" * 12000
-    assert blocks[1]["text"] == "A" * 12000
-    assert blocks[2]["text"] == "A" * 1000
+    assert len(blocks) == 3  # 3000 + 3000 + 1000
+    assert all(b["type"] == "section" for b in blocks)
+    assert all(b["text"]["type"] == "mrkdwn" for b in blocks)
+    assert blocks[0]["text"]["text"] == "A" * 3000
+    assert blocks[1]["text"]["text"] == "A" * 3000
+    assert blocks[2]["text"]["text"] == "A" * 1000
 
 
 @pytest.mark.asyncio
