@@ -137,7 +137,7 @@ def test_llm_router_deepseek_provider_mapping():
 
 @pytest.mark.asyncio
 async def test_llm_router_uses_oauth_token():
-    """When provider has oauth auth_type, should use OAuthManager token."""
+    """When provider has oauth auth_type, should route to ChatGPT backend."""
     from mindclaw.config.schema import MindClawConfig, ProviderSettings
     from mindclaw.llm.router import LLMRouter
 
@@ -149,30 +149,26 @@ async def test_llm_router_uses_oauth_token():
 
     router = LLMRouter(config, oauth_manager=mock_oauth)
 
-    mock_response = AsyncMock()
-    mock_response.choices = [AsyncMock()]
-    mock_response.choices[0].message.content = "Hello!"
-    mock_response.choices[0].message.tool_calls = None
+    mock_client = AsyncMock()
+    mock_client.chat.return_value = ("Hello!", None)
+    router._chatgpt_client = mock_client
 
-    captured_kwargs = {}
+    result = await router.chat(
+        messages=[{"role": "user", "content": "Hi"}],
+        model="openai/gpt-4o",
+    )
 
-    async def capture_acompletion(**kwargs):
-        captured_kwargs.update(kwargs)
-        return mock_response
-
-    with patch("mindclaw.llm.router.acompletion", side_effect=capture_acompletion):
-        await router.chat(
-            messages=[{"role": "user", "content": "Hi"}],
-            model="openai/gpt-4o",
-        )
-
-    assert captured_kwargs["api_key"] == "oauth_access_token_123"
+    assert result.content == "Hello!"
     mock_oauth.get_access_token.assert_awaited_once_with("openai")
+    mock_client.chat.assert_awaited_once()
+    call_kwargs = mock_client.chat.call_args
+    assert call_kwargs.kwargs["access_token"] == "oauth_access_token_123"
+    assert call_kwargs.kwargs["model"] == "openai/gpt-4o"
 
 
 @pytest.mark.asyncio
-async def test_llm_router_oauth_uses_api_base_from_provider():
-    """OAuth provider should also use api_base from OAUTH_PROVIDERS config."""
+async def test_llm_router_oauth_routes_to_chatgpt_backend():
+    """OAuth OpenAI provider should route to ChatGPT backend, not LiteLLM."""
     from mindclaw.config.schema import MindClawConfig, ProviderSettings
     from mindclaw.llm.router import LLMRouter
 
@@ -184,24 +180,18 @@ async def test_llm_router_oauth_uses_api_base_from_provider():
 
     router = LLMRouter(config, oauth_manager=mock_oauth)
 
-    mock_response = AsyncMock()
-    mock_response.choices = [AsyncMock()]
-    mock_response.choices[0].message.content = "Hi"
-    mock_response.choices[0].message.tool_calls = None
+    mock_client = AsyncMock()
+    mock_client.chat.return_value = ("Hi", None)
+    router._chatgpt_client = mock_client
 
-    captured_kwargs = {}
+    result = await router.chat(
+        messages=[{"role": "user", "content": "Hi"}],
+        model="openai/gpt-4o",
+    )
 
-    async def capture(**kwargs):
-        captured_kwargs.update(kwargs)
-        return mock_response
-
-    with patch("mindclaw.llm.router.acompletion", side_effect=capture):
-        await router.chat(
-            messages=[{"role": "user", "content": "Hi"}],
-            model="openai/gpt-4o",
-        )
-
-    assert captured_kwargs.get("api_base") == "https://api.openai.com/v1"
+    assert result.content == "Hi"
+    # Should NOT call acompletion (LiteLLM)
+    mock_client.chat.assert_awaited_once()
 
 
 def test_provider_settings_auth_type_default():

@@ -1,6 +1,7 @@
-# input: litellm, config/schema.py, oauth/manager.py (optional), oauth/providers.py
+# input: litellm, config/schema.py, oauth/manager.py (optional), oauth/providers.py,
+#        llm/chatgpt_client.py
 # output: 导出 LLMRouter, ChatResult
-# pos: 大脑层核心，统一 LLM 调用接口，支持 API Key 和 OAuth 认证
+# pos: 大脑层核心，统一 LLM 调用接口，支持 API Key / OAuth(ChatGPT 后端) / LiteLLM
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from __future__ import annotations
@@ -31,7 +32,9 @@ _MODEL_PROVIDER_MAP = {
     "deepseek": "deepseek",
 }
 
-_FALLBACK_ERRORS = (RateLimitError, asyncio.TimeoutError, AuthenticationError)
+_FALLBACK_ERRORS = (
+    RateLimitError, asyncio.TimeoutError, AuthenticationError, RuntimeError,
+)
 
 
 @dataclass
@@ -49,6 +52,7 @@ class LLMRouter:
     ) -> None:
         self.config = config
         self._oauth_manager = oauth_manager
+        self._chatgpt_client: Any = None
 
     def resolve_model(self, model: str | None) -> str:
         return model or self.config.agent.default_model
@@ -72,6 +76,44 @@ class LLMRouter:
             if model.startswith(prefix):
                 return provider
         return None
+
+    def _is_chatgpt_backend(self, model: str) -> bool:
+        """Check if this model should use the ChatGPT backend (OAuth subscription)."""
+        provider = self._extract_provider(model)
+        if provider != "openai" or self._oauth_manager is None:
+            return False
+        settings = self.config.providers.get("openai")
+        return settings is not None and settings.auth_type == "oauth"
+
+    def _get_chatgpt_client(self) -> Any:
+        if self._chatgpt_client is None:
+            from mindclaw.llm.chatgpt_client import ChatGPTBackendClient
+
+            self._chatgpt_client = ChatGPTBackendClient(timeout=120)
+        return self._chatgpt_client
+
+    async def _chat_chatgpt_backend(
+        self,
+        model: str,
+        messages: list[dict],
+        tools: list[dict] | None,
+    ) -> ChatResult:
+        """Call via ChatGPT backend Responses API (subscription quota)."""
+        if self._oauth_manager is None:
+            raise RuntimeError("OAuth manager required for ChatGPT backend")
+        access_token = await self._oauth_manager.get_access_token("openai")
+        client = self._get_chatgpt_client()
+        content, tool_calls = await client.chat(
+            access_token=access_token,
+            model=model,
+            messages=messages,
+            tools=tools,
+        )
+        return ChatResult(
+            content=content,
+            tool_calls=tool_calls,
+            used_fallback=False,
+        )
 
     async def _build_kwargs(
         self,
@@ -107,13 +149,9 @@ class LLMRouter:
         kwargs["timeout"] = 120
         return kwargs
 
-    def _can_fallback(self, model: str, explicitly_specified: bool) -> bool:
+    def _can_fallback(self, model: str) -> bool:
         fallback = self.config.agent.fallback_model
-        return (
-            not explicitly_specified
-            and fallback != model
-            and bool(fallback)
-        )
+        return fallback != model and bool(fallback)
 
     async def chat(
         self,
@@ -122,12 +160,17 @@ class LLMRouter:
         tools: list[dict] | None = None,
     ) -> ChatResult:
         resolved_model = self.resolve_model(model)
-        explicitly_specified = model is not None
         logger.debug(f"LLM call: model={resolved_model}, messages={len(messages)}")
 
-        kwargs = await self._build_kwargs(resolved_model, messages, tools)
-
         try:
+            # Route OpenAI OAuth models to ChatGPT backend
+            if self._is_chatgpt_backend(resolved_model):
+                return await self._chat_chatgpt_backend(
+                    resolved_model, messages, tools
+                )
+
+            # All other models go through LiteLLM
+            kwargs = await self._build_kwargs(resolved_model, messages, tools)
             response = await acompletion(**kwargs)
             message = response.choices[0].message
             return ChatResult(
@@ -136,7 +179,7 @@ class LLMRouter:
                 used_fallback=False,
             )
         except _FALLBACK_ERRORS as e:
-            if not self._can_fallback(resolved_model, explicitly_specified):
+            if not self._can_fallback(resolved_model):
                 raise
 
             fallback_model = self.config.agent.fallback_model
@@ -145,6 +188,7 @@ class LLMRouter:
                 f"falling back to {fallback_model}"
             )
 
+            # Fallback always goes through LiteLLM (non-OAuth fallback model)
             fallback_kwargs = await self._build_kwargs(fallback_model, messages, tools)
             response = await acompletion(**fallback_kwargs)
             message = response.choices[0].message

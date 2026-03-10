@@ -1,6 +1,6 @@
 # input: oauth/token_store, oauth/providers, oauth/pkce, httpx
 # output: 导出 OAuthManager
-# pos: OAuth 流程管理器，处理授权 URL 生成、token 交换和自动刷新
+# pos: OAuth 流程管理器，处理授权 URL 生成、token 交换、API token exchange 和自动刷新
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
@@ -14,7 +14,6 @@ from loguru import logger
 from .pkce import generate_pkce_pair
 from .providers import OAUTH_PROVIDERS
 from .token_store import OAuthTokenInfo, OAuthTokenStore
-
 
 class OAuthManager:
     """Manages OAuth authorization flows, token exchange, and refresh."""
@@ -72,9 +71,11 @@ class OAuthManager:
                 )
 
             data = response.json()
+
             new_token = OAuthTokenInfo(
                 access_token=data["access_token"],
                 refresh_token=data.get("refresh_token", token_info.refresh_token),
+                id_token=data.get("id_token"),
                 token_type=data.get("token_type", "Bearer"),
                 expires_at=time.time() + data.get("expires_in", 3600),
                 scopes=token_info.scopes,
@@ -106,6 +107,8 @@ class OAuthManager:
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
+            "id_token_add_organizations": "true",
+            "codex_cli_simplified_flow": "true",
         }
 
         url = f"{provider_config.auth_url}?{urlencode(params)}"
@@ -144,9 +147,11 @@ class OAuthManager:
             )
 
         data = response.json()
+
         token_info = OAuthTokenInfo(
             access_token=data["access_token"],
             refresh_token=data.get("refresh_token"),
+            id_token=data.get("id_token"),
             token_type=data.get("token_type", "Bearer"),
             expires_at=time.time() + data.get("expires_in", 3600),
             scopes=provider_config.scopes,

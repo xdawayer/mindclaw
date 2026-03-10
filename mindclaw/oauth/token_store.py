@@ -17,6 +17,7 @@ class OAuthTokenInfo(BaseModel):
 
     access_token: str
     refresh_token: str | None = None
+    id_token: str | None = None
     token_type: str = "Bearer"
     expires_at: float | None = None
     scopes: list[str] = Field(default_factory=list)
