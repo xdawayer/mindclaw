@@ -59,7 +59,9 @@ class PluginManifest:
             raise PluginManifestError("'hooks' must be a dict")
         for key, val in raw_hooks.items():
             if not isinstance(val, str):
-                raise PluginManifestError(f"'hooks' values must be strings, got {type(val).__name__} for '{key}'")
+                raise PluginManifestError(
+                    f"'hooks' values must be strings, got {type(val).__name__} for '{key}'"
+                )
             if key not in VALID_HOOK_NAMES:
                 raise PluginManifestError(
                     f"Invalid hook name: '{key}'. Valid: {sorted(VALID_HOOK_NAMES)}"

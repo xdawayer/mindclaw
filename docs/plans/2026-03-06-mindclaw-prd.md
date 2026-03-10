@@ -979,15 +979,15 @@ mindclaw/
 - **里程碑：** 能安装和运行自定义插件
 
 ### Phase 8: 更多渠道 (Day 69-80)
-- [ ] 实现 channels/slack.py
-- [ ] 实现 channels/feishu.py
-- [ ] 实现 channels/discord.py (discord.py 库)
+- [x] 实现 channels/slack.py (Socket Mode WebSocket)
+- [x] 实现 channels/feishu.py (lark-oapi WebSocket)
+- [x] 实现 channels/discord_channel.py (discord.py Bot gateway)
 - **里程碑：** 5 个渠道全部可用
 
 ### Phase 9: 知识管理 (Day 81-93)
-- [ ] 实现 knowledge/obsidian.py (深度集成)
-- [ ] 实现 knowledge/notion.py (API 集成)
-- [ ] 实现 knowledge/web_archive.py (网页收藏)
+- [x] 实现 knowledge/obsidian.py (深度集成)
+- [x] 实现 knowledge/notion.py (API 集成)
+- [x] 实现 knowledge/web_archive.py (网页收藏)
 - [ ] 可选：实现 knowledge/vector.py (LanceDB 语义搜索)
 - **里程碑：** AI 能读写 Obsidian/Notion，搜索知识库
 

@@ -6,7 +6,7 @@
 ## Tech Stack
 
 - **Python 3.12+** / asyncio / uv (包管理)
-- LiteLLM (多模型路由) / Pydantic (配置校验)
+- LiteLLM (多模型路由) / Pydantic (配置校验) / croniter (定时任务)
 - Typer + Rich (CLI) / websockets (Gateway)
 - httpx / loguru / pytest + pytest-asyncio
 
@@ -25,7 +25,7 @@
 - **编排层**: ReAct Agent Loop (最多 40 轮)，ACP 协议管理子 Agent (asyncio.subprocess + JSON stdio)
 - **大脑层**: LiteLLM 统一路由，Prompt 缓存，自动降级
 - **安全层**: 三层认证 (Gateway Token / 设备配对 / 白名单)，工具三级风险 (safe/moderate/dangerous)，审批工作流
-- **工具层**: Tool 抽象基类 + ToolRegistry，内置 14 个工具，插件系统 (manifest.json + hooks)
+- **工具层**: Tool 抽象基类 + ToolRegistry，内置 17 个工具 (含 Cron CRUD)，插件系统 (manifest.json + hooks)
 - **知识层**: 四层记忆 (Session JSONL / MEMORY.md / LanceDB向量 / HISTORY.md)
 
 ## Project Structure
@@ -43,9 +43,11 @@ mindclaw/
 │   ├── tools/         # 工具 (base + registry + 各工具实现)
 │   ├── plugins/       # 插件系统 (loader + hooks)
 │   ├── knowledge/     # 知识层 (memory + session + obsidian + notion)
-│   ├── skills/        # 技能 Markdown 文件
+│   ├── skills/        # 技能系统 (SkillRegistry + Markdown 技能文件)
+│   ├── health/        # 健康检查 (HealthMonitor + HTTP /health /ready)
 │   ├── templates/     # SOUL.md / AGENTS.md
 │   └── config/        # Pydantic 配置 (schema + loader)
+├── deploy/            # Daemon 部署模板 (systemd / launchd)
 ├── plugins/           # 用户插件目录
 ├── tests/             # pytest 测试
 └── docs/plans/        # PRD 等文档
@@ -63,7 +65,7 @@ mindclaw/
 
 ## Development Phases
 
-当前进度：Phase 6 (编排层) — Phase 0-5 已完成
+当前进度：Phase 10 核心完成 — LLM 自动降级、技能系统、定时任务、健康检查、微信渠道、Daemon 部署已实现，向量搜索 (LanceDB) 待做
 
 | Phase | 内容 | 里程碑 |
 |-------|------|--------|
@@ -75,7 +77,9 @@ mindclaw/
 | 5 | Gateway + Telegram | 手机远程对话 |
 | 6 | 编排层 | 子 Agent 并行任务 |
 | 7 | 插件系统 | 自定义插件可用 |
-| 8-10 | 更多渠道 + 知识管理 + 高级功能 | 完整体 |
+| 8 | 更多渠道 (Discord/Slack/飞书) | 多平台接入 |
+| 9 | 知识管理 (Obsidian/Notion/WebArchive) | 外部知识源整合 |
+| 10 | LLM 自动降级 + 技能系统 + 定时任务 + 健康检查 + 微信渠道 + Daemon 部署 | 生产就绪 |
 
 ---
 

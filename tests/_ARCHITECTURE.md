@@ -30,3 +30,20 @@
 | `test_gateway_server.py` | 集成测试 | GatewayServer + GatewayChannel (WebSocket 认证/消息收发/ping-pong/出站推送) 测试 |
 | `test_telegram_channel.py` | 单元测试 | TelegramChannel (消息接收/白名单过滤/群组过滤/发送/polling 启停) 测试 |
 | `test_commands.py` | 单元测试 | CLI 命令测试 (version/secret-set/secret-list/secret-delete) |
+| `test_bus_enhanced.py` | 单元测试 | 增强消息总线 (去重/限流) 测试 |
+| `test_tools_spawn_task.py` | 单元测试 | SpawnTaskTool (子 Agent 创建/并发限制/结果返回) 测试 |
+| `test_tools_message_user.py` | 单元测试 | MessageUserTool (出站消息发送/风险等级/上下文注入) 测试 |
+| `test_orchestrator_integration.py` | 集成测试 | Orchestrator 编排层集成测试 |
+| `test_acp.py` | 单元测试 | ACP 协议 (Agent 进程通信) 测试 |
+| `test_subagent.py` | 单元测试 | SubAgent 管理器测试 |
+| `test_plugins_hooks.py` | 单元测试 | 插件 Hook 管理器测试 |
+| `test_plugin_integration.py` | 集成测试 | 插件系统集成测试 |
+| `test_plugins_manifest.py` | 单元测试 | 插件清单解析测试 |
+| `test_plugins_loader.py` | 单元测试 | 插件加载器测试 |
+| `test_slack_channel.py` | 单元测试 | Slack 渠道 (Socket Mode 消息收发) 测试 |
+| `test_discord_channel.py` | 单元测试 | Discord 渠道 (Bot gateway 消息收发) 测试 |
+| `test_feishu_channel.py` | 单元测试 | 飞书渠道 (lark-oapi WebSocket) 测试 |
+| `test_knowledge_text_utils.py` | 单元测试 | 共享文本工具 (html_to_text / extract_snippet) 测试 |
+| `test_knowledge_obsidian.py` | 单元测试 | ObsidianKnowledge (读写/搜索/列出/标签含YAML list/链接/路径安全) 测试 |
+| `test_knowledge_notion.py` | 单元测试 | NotionKnowledge (读/创建含page parent/更新/搜索/列数据库/ID验证/Block→Markdown含to_do/API key warning) 测试 |
+| `test_knowledge_web_archive.py` | 单元测试 | WebArchive (保存/去重/搜索/列出/max_pages/URL验证/frontmatter防注入) 测试 |

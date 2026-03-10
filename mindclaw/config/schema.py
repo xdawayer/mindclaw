@@ -1,6 +1,7 @@
 # input: pydantic
 # output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ChannelConfig, ProviderSettings,
-#         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig
+#         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig,
+#         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig
 # pos: 配置层核心，定义所有配置的 Pydantic 模型
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
@@ -19,6 +20,9 @@ class AgentConfig(BaseModel):
 class ChannelConfig(BaseModel):
     enabled: bool = True
     token: str = ""
+    app_token: str = Field(default="", alias="appToken")
+    app_id: str = Field(default="", alias="appId")
+    app_secret: str = Field(default="", alias="appSecret")
     allow_from: list[str] = Field(default_factory=list, alias="allowFrom")
     allow_groups: bool = Field(default=False, alias="allowGroups")
 
@@ -68,10 +72,40 @@ class SecurityConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ObsidianConfig(BaseModel):
+    vault_path: str = Field(default="", alias="vaultPath")
+
+    model_config = {"populate_by_name": True}
+
+
+class NotionConfig(BaseModel):
+    api_key: str = Field(default="", alias="apiKey")
+
+    model_config = {"populate_by_name": True}
+
+
+class WebArchiveConfig(BaseModel):
+    max_pages: int = Field(default=1000, alias="maxPages")
+
+    model_config = {"populate_by_name": True}
+
+
+class VectorDbConfig(BaseModel):
+    enabled: bool = False
+    provider: str = "lancedb"
+    embedding_model: str = Field(default="text-embedding-3-small", alias="embeddingModel")
+
+    model_config = {"populate_by_name": True}
+
+
 class KnowledgeConfig(BaseModel):
     data_dir: str = Field(default="data", alias="dataDir")
     consolidation_threshold: int = Field(default=20, alias="consolidationThreshold")
     consolidation_keep_recent: int = Field(default=10, alias="consolidationKeepRecent")
+    obsidian: ObsidianConfig = Field(default_factory=ObsidianConfig)
+    notion: NotionConfig = Field(default_factory=NotionConfig)
+    web_archive: WebArchiveConfig = Field(default_factory=WebArchiveConfig, alias="webArchive")
+    vector_db: VectorDbConfig = Field(default_factory=VectorDbConfig, alias="vectorDb")
 
     model_config = {"populate_by_name": True}
 

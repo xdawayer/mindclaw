@@ -12,3 +12,4 @@
 | `web.py` | 内置工具 | WebFetchTool (流式网页抓取 + SSRF 防护) + WebSearchTool (Brave 搜索) |
 | `message_user.py` | 内置工具 | MessageUserTool - 主动发消息给用户 (MODERATE)，channel/chat_id 由 AgentLoop 动态更新 |
 | `spawn_task.py` | 内置工具 | SpawnTaskTool - 派发子 Agent 任务 (DANGEROUS)，通过 SubAgentManager 管理 |
+| `cron.py` | 内置工具 | CronAddTool / CronListTool / CronRemoveTool - 定时任务 CRUD (MODERATE)，持久化到 cron_tasks.json |

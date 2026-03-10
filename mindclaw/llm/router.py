@@ -3,11 +3,13 @@
 # pos: 大脑层核心，统一 LLM 调用接口
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 from typing import Any
 
 import litellm
 from litellm import acompletion
+from litellm.exceptions import AuthenticationError, RateLimitError
 from loguru import logger
 
 from mindclaw.config.schema import MindClawConfig
@@ -22,11 +24,14 @@ _MODEL_PROVIDER_MAP = {
     "o4": "openai",
 }
 
+_FALLBACK_ERRORS = (RateLimitError, asyncio.TimeoutError, AuthenticationError)
+
 
 @dataclass
 class ChatResult:
     content: str | None
     tool_calls: list[Any] | None
+    used_fallback: bool = field(default=False)
 
 
 class LLMRouter:
@@ -49,23 +54,17 @@ class LLMRouter:
                 return provider
         return None
 
-    async def chat(
+    def _build_kwargs(
         self,
+        model: str,
         messages: list[dict],
-        model: str | None = None,
-        tools: list[dict] | None = None,
-    ) -> ChatResult:
-        resolved_model = self.resolve_model(model)
-        logger.debug(f"LLM call: model={resolved_model}, messages={len(messages)}")
-
-        kwargs: dict[str, Any] = {
-            "model": resolved_model,
-            "messages": messages,
-        }
+        tools: list[dict] | None,
+    ) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {"model": model, "messages": messages}
         if tools:
             kwargs["tools"] = tools
 
-        provider = self._extract_provider(resolved_model)
+        provider = self._extract_provider(model)
         if provider and provider in self.config.providers:
             settings = self.config.providers[provider]
             if settings.api_key:
@@ -74,10 +73,51 @@ class LLMRouter:
                 kwargs["api_base"] = settings.api_base
 
         kwargs["timeout"] = 120
-        response = await acompletion(**kwargs)
-        message = response.choices[0].message
+        return kwargs
 
-        return ChatResult(
-            content=message.content,
-            tool_calls=message.tool_calls,
+    def _can_fallback(self, model: str, explicitly_specified: bool) -> bool:
+        fallback = self.config.agent.fallback_model
+        return (
+            not explicitly_specified
+            and fallback != model
+            and bool(fallback)
         )
+
+    async def chat(
+        self,
+        messages: list[dict],
+        model: str | None = None,
+        tools: list[dict] | None = None,
+    ) -> ChatResult:
+        resolved_model = self.resolve_model(model)
+        explicitly_specified = model is not None
+        logger.debug(f"LLM call: model={resolved_model}, messages={len(messages)}")
+
+        kwargs = self._build_kwargs(resolved_model, messages, tools)
+
+        try:
+            response = await acompletion(**kwargs)
+            message = response.choices[0].message
+            return ChatResult(
+                content=message.content,
+                tool_calls=message.tool_calls,
+                used_fallback=False,
+            )
+        except _FALLBACK_ERRORS as e:
+            if not self._can_fallback(resolved_model, explicitly_specified):
+                raise
+
+            fallback_model = self.config.agent.fallback_model
+            logger.warning(
+                f"Primary model {resolved_model} failed ({type(e).__name__}), "
+                f"falling back to {fallback_model}"
+            )
+
+            fallback_kwargs = self._build_kwargs(fallback_model, messages, tools)
+            response = await acompletion(**fallback_kwargs)
+            message = response.choices[0].message
+            return ChatResult(
+                content=message.content,
+                tool_calls=message.tool_calls,
+                used_fallback=True,
+            )

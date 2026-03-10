@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  MindClaw launchd service file (macOS)
+  Install: cp com.mindclaw.plist ~/Library/LaunchAgents/
+  Load:    launchctl load ~/Library/LaunchAgents/com.mindclaw.plist
+  Unload:  launchctl unload ~/Library/LaunchAgents/com.mindclaw.plist
+  Logs:    tail -f ~/Library/Logs/mindclaw.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mindclaw.assistant</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/uv</string>
+        <string>run</string>
+        <string>mindclaw</string>
+        <string>serve</string>
+        <string>--gateway</string>
+        <string>--telegram</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/wzb/Documents/mindclaw</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/wzb/Library/Logs/mindclaw.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/wzb/Library/Logs/mindclaw.error.log</string>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>

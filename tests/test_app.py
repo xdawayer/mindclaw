@@ -173,3 +173,60 @@ async def test_approval_reply_must_match_channel_and_chat():
 
     result = await asyncio.wait_for(request_task, timeout=1.0)
     assert result is True, "Approval from correct channel should be accepted"
+
+
+def test_app_has_skill_registry():
+    """Phase 10: MindClawApp should initialize SkillRegistry and inject into ContextBuilder."""
+    from mindclaw.app import MindClawApp
+
+    config = MindClawConfig()
+    app = MindClawApp(config)
+    assert hasattr(app, "skill_registry")
+    assert app.skill_registry is not None
+    # ContextBuilder should have skill_registry
+    assert app.context_builder._skill_registry is not None
+
+
+def test_app_registers_cron_tools():
+    """Phase 10: MindClawApp should register cron_add, cron_list, cron_remove tools."""
+    from mindclaw.app import MindClawApp
+
+    config = MindClawConfig()
+    app = MindClawApp(config)
+    app._register_tools()
+    assert app.tool_registry.get("cron_add") is not None
+    assert app.tool_registry.get("cron_list") is not None
+    assert app.tool_registry.get("cron_remove") is not None
+
+
+def test_app_has_cron_scheduler():
+    """Phase 10: MindClawApp should have a CronScheduler instance."""
+    from mindclaw.app import MindClawApp
+
+    config = MindClawConfig()
+    app = MindClawApp(config)
+    assert hasattr(app, "cron_scheduler")
+    assert app.cron_scheduler is not None
+
+
+def test_app_has_health_server():
+    """Phase 10: MindClawApp should have a HealthCheckServer instance."""
+    from mindclaw.app import MindClawApp
+
+    config = MindClawConfig()
+    app = MindClawApp(config)
+    assert hasattr(app, "health_server")
+    assert app.health_server is not None
+
+
+def test_app_setup_wechat_channel():
+    """Phase 10: _setup_channels should handle 'wechat'."""
+    from mindclaw.app import MindClawApp
+
+    config = MindClawConfig(
+        channels={"wechat": {"token": "", "enabled": True}}
+    )
+    app = MindClawApp(config)
+    # wechat requires bridge_url in config; without it, it should log warning and skip
+    # but the code path should exist and not raise KeyError
+    app._setup_channels(["wechat"])

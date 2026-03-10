@@ -17,15 +17,19 @@ from mindclaw.bus.queue import MessageBus
 from mindclaw.channels.cli_channel import CLIChannel
 from mindclaw.channels.manager import ChannelManager
 from mindclaw.config.schema import MindClawConfig
-from mindclaw.plugins.hooks import HookRegistry
-from mindclaw.plugins.loader import PluginLoader
+from mindclaw.health.check import HealthCheckServer, HealthMonitor
 from mindclaw.knowledge.memory import MemoryManager
 from mindclaw.knowledge.session import SessionStore
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.agent_loop import AgentLoop
 from mindclaw.orchestrator.context import ContextBuilder
+from mindclaw.orchestrator.cron_scheduler import CronScheduler
 from mindclaw.orchestrator.subagent import SubAgentManager
+from mindclaw.plugins.hooks import HookRegistry
+from mindclaw.plugins.loader import PluginLoader
 from mindclaw.security.approval import ApprovalManager
+from mindclaw.skills.registry import SkillRegistry
+from mindclaw.tools.cron import CronAddTool, CronListTool, CronRemoveTool
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from mindclaw.tools.message_user import MessageUserTool
 from mindclaw.tools.registry import ToolRegistry
@@ -53,7 +57,25 @@ class MindClawApp:
             router=self.router,
             config=config,
         )
-        self.context_builder = ContextBuilder(memory_manager=self.memory_manager)
+
+        # Skills
+        skills_dir = Path(__file__).parent / "skills"
+        self.skill_registry = SkillRegistry(skills_dir)
+
+        self.context_builder = ContextBuilder(
+            memory_manager=self.memory_manager,
+            skill_registry=self.skill_registry,
+        )
+
+        # Cron scheduler
+        self.cron_scheduler = CronScheduler(
+            data_dir=data_dir,
+            on_trigger=self._on_cron_trigger,
+        )
+
+        # Health check
+        health_monitor = HealthMonitor()
+        self.health_server = HealthCheckServer(monitor=health_monitor)
 
         self.approval_manager = ApprovalManager(
             bus=self.bus,
@@ -76,6 +98,18 @@ class MindClawApp:
 
         self._gateway_auth = None
         self._agent_task: asyncio.Task | None = None
+
+    async def _on_cron_trigger(self, name: str, action: str) -> None:
+        """Handle cron task triggers by sending them as inbound messages."""
+        await self.bus.put_inbound(
+            InboundMessage(
+                channel="system",
+                chat_id="cron",
+                user_id="cron",
+                username="CronScheduler",
+                text=f"[Scheduled Task: {name}] {action}",
+            )
+        )
 
     # ── Tool registration ─────────────────────────────────────
 
@@ -103,6 +137,12 @@ class MindClawApp:
         ))
         self.tool_registry.register(SpawnTaskTool(manager=self.subagent_manager))
 
+        # Cron tools
+        data_dir = Path(self.config.knowledge.data_dir)
+        self.tool_registry.register(CronAddTool(data_dir=data_dir))
+        self.tool_registry.register(CronListTool(data_dir=data_dir))
+        self.tool_registry.register(CronRemoveTool(data_dir=data_dir))
+
         # Load plugins (after built-ins so plugins can override)
         self._load_plugins()
 
@@ -126,6 +166,14 @@ class MindClawApp:
                 self._setup_gateway()
             elif name == "telegram":
                 self._setup_telegram()
+            elif name == "slack":
+                self._setup_slack()
+            elif name == "feishu":
+                self._setup_feishu()
+            elif name == "discord":
+                self._setup_discord()
+            elif name == "wechat":
+                self._setup_wechat()
             else:
                 logger.warning(f"Unknown channel: {name}")
 
@@ -185,6 +233,76 @@ class MindClawApp:
                 token=tg_config.token,
                 allow_from=tg_config.allow_from or None,
                 allow_groups=tg_config.allow_groups,
+            )
+        )
+
+    def _setup_slack(self) -> None:
+        from mindclaw.channels.slack import SlackChannel
+
+        slack_config = self.config.channels.get("slack")
+        if not slack_config or not slack_config.app_token or not slack_config.token:
+            logger.warning("Slack channel configured but missing appToken or token, skipping")
+            return
+
+        self.channel_manager.register(
+            SlackChannel(
+                bus=self.bus,
+                app_token=slack_config.app_token,
+                bot_token=slack_config.token,
+                allow_from=slack_config.allow_from or None,
+                allow_groups=slack_config.allow_groups,
+            )
+        )
+
+    def _setup_feishu(self) -> None:
+        from mindclaw.channels.feishu import FeishuChannel
+
+        feishu_config = self.config.channels.get("feishu")
+        if not feishu_config or not feishu_config.app_id or not feishu_config.app_secret:
+            logger.warning("Feishu channel configured but missing appId or appSecret, skipping")
+            return
+
+        self.channel_manager.register(
+            FeishuChannel(
+                bus=self.bus,
+                app_id=feishu_config.app_id,
+                app_secret=feishu_config.app_secret,
+                allow_from=feishu_config.allow_from or None,
+                allow_groups=feishu_config.allow_groups,
+            )
+        )
+
+    def _setup_discord(self) -> None:
+        from mindclaw.channels.discord_channel import DiscordChannel
+
+        discord_config = self.config.channels.get("discord")
+        if not discord_config or not discord_config.token:
+            logger.warning("Discord channel configured but no token provided, skipping")
+            return
+
+        self.channel_manager.register(
+            DiscordChannel(
+                bus=self.bus,
+                token=discord_config.token,
+                allow_from=discord_config.allow_from or None,
+                allow_groups=discord_config.allow_groups,
+            )
+        )
+
+    def _setup_wechat(self) -> None:
+        from mindclaw.channels.wechat_channel import WeChatChannel
+
+        wechat_config = self.config.channels.get("wechat")
+        if not wechat_config or not wechat_config.token:
+            logger.warning("WeChat channel configured but no bridge_url (token field), skipping")
+            return
+
+        self.channel_manager.register(
+            WeChatChannel(
+                bus=self.bus,
+                bridge_url=wechat_config.token,  # token field stores bridge_url
+                allow_from=wechat_config.allow_from or None,
+                allow_groups=wechat_config.allow_groups,
             )
         )
 
@@ -276,6 +394,10 @@ class MindClawApp:
         self._register_tools()
         self._setup_channels(channel_names)
 
+        # Start background services
+        await self.cron_scheduler.start()
+        await self.health_server.start()
+
         # on_start hook
         await self.hook_registry.call("on_start")
 
@@ -301,6 +423,9 @@ class MindClawApp:
                     await self._agent_task
                 except asyncio.CancelledError:
                     pass
+            # Stop background services
+            await self.cron_scheduler.stop()
+            await self.health_server.stop()
             # on_stop hook
             await self.hook_registry.call("on_stop")
             await self.channel_manager.stop_all()

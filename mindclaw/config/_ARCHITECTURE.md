@@ -5,5 +5,5 @@
 | 文件 | 地位 | 功能 |
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
-| `schema.py` | 核心 | Pydantic 配置模型定义 (AgentConfig, ChannelConfig, GatewayConfig, ProviderSettings, ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig, MindClawConfig) |
+| `schema.py` | 核心 | Pydantic 配置模型定义 (AgentConfig, ChannelConfig, GatewayConfig, ProviderSettings, ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig + ObsidianConfig/NotionConfig/WebArchiveConfig/VectorDbConfig, MindClawConfig) |
 | `loader.py` | 核心 | JSON 配置文件加载 + 环境变量解析 |

@@ -1,15 +1,16 @@
-# input: tools/base.py, httpx, ipaddress, socket
+# input: tools/base.py, httpx, ipaddress, socket, knowledge/_text_utils.py
 # output: 导出 WebSearchTool, WebFetchTool
 # pos: 网页搜索和抓取工具，含 SSRF 防护
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import ipaddress
-import re
 import socket
 from urllib.parse import urljoin, urlparse
 
 import httpx
 from loguru import logger
+
+from mindclaw.knowledge._text_utils import html_to_text
 
 from .base import RiskLevel, Tool
 
@@ -38,14 +39,6 @@ def _is_safe_url(url: str) -> bool:
         return True
     except (socket.gaierror, ValueError, OSError):
         return False
-
-
-def _html_to_text(html: str) -> str:
-    text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
 
 
 class WebFetchTool(Tool):
@@ -98,7 +91,7 @@ class WebFetchTool(Tool):
                 charset = content_type.split("charset=")[-1].split(";")[0].strip()
             text_content = bytes(body).decode(charset, errors="replace")
             if "text/html" in content_type:
-                text = _html_to_text(text_content)
+                text = html_to_text(text_content)
             else:
                 text = text_content
             if len(text) > self.max_chars:

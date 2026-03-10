@@ -14,9 +14,18 @@ dependencies = [
     "websockets>=14.0",
     "python-telegram-bot>=21.0",
     "cryptography>=44.0",
+    "croniter>=1.4",
 ]
 
 [project.optional-dependencies]
+slack = ["slack-sdk>=3.33"]
+feishu = ["lark-oapi>=1.0"]
+discord = ["discord.py>=2.0"]
+all-channels = [
+    "slack-sdk>=3.33",
+    "lark-oapi>=1.0",
+    "discord.py>=2.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",
