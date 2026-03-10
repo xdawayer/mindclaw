@@ -60,11 +60,18 @@ class HealthCheckServer:
         return self._port
 
     async def start(self) -> None:
-        self._server = await asyncio.start_server(
-            self._handle_connection,
-            "127.0.0.1",
-            self._requested_port,
-        )
+        try:
+            self._server = await asyncio.start_server(
+                self._handle_connection,
+                "127.0.0.1",
+                self._requested_port,
+            )
+        except OSError as e:
+            logger.warning(
+                f"HealthCheck server failed to bind port {self._requested_port}: {e}. "
+                "Health endpoints will be unavailable."
+            )
+            return
         # Resolve actual port (important when port=0)
         addr = self._server.sockets[0].getsockname()
         self._port = addr[1]
