@@ -16,6 +16,7 @@ dependencies = [
     "cryptography>=44.0",
     "croniter>=1.4",
     "slack-sdk>=3.33",
+    "markdown-to-mrkdwn>=0.3.1",
 ]
 
 [project.optional-dependencies]

@@ -248,7 +248,7 @@ async def test_slack_on_event_ack_sent():
 
 
 @pytest.mark.asyncio
-async def test_slack_send():
+async def test_slack_send_plain_text():
     from mindclaw.channels.slack import SlackChannel
 
     bus = MessageBus()
@@ -262,6 +262,31 @@ async def test_slack_send():
         channel="C67890",
         text="reply text",
     )
+
+
+@pytest.mark.asyncio
+async def test_slack_send_converts_markdown():
+    """send() should convert standard Markdown to Slack mrkdwn format."""
+    from mindclaw.channels.slack import SlackChannel
+
+    bus = MessageBus()
+    ch = SlackChannel(bus=bus, app_token="xapp-fake", bot_token="xoxb-fake")
+    ch._web_client = AsyncMock()
+
+    msg = OutboundMessage(
+        channel="slack",
+        chat_id="C67890",
+        text="**bold** and [link](https://example.com)",
+    )
+    await ch.send(msg)
+
+    call_kwargs = ch._web_client.chat_postMessage.call_args.kwargs
+    sent_text = call_kwargs["text"]
+    # **bold** should become *bold* in Slack mrkdwn
+    assert "**bold**" not in sent_text
+    assert "*bold*" in sent_text
+    # [link](url) should become <url|link> in Slack mrkdwn
+    assert "<https://example.com|link>" in sent_text
 
 
 @pytest.mark.asyncio

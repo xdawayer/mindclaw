@@ -941,6 +941,15 @@ wheels = [
 ]
 
 [[package]]
+name = "markdown-to-mrkdwn"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/17/8e/f2c62a88097425b0dba3a8699d13154b4c5888b989ffaf6419c10058b338/markdown_to_mrkdwn-0.3.1.tar.gz", hash = "sha256:25f5c095516f8ad956c88c5dab75493aadfaa02e51e3c84459490058a8ca840b", size = 14191, upload-time = "2026-01-05T14:37:29.276Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/92/ce0a08fb9769a13be550a7079c3409300ca6eb14ccc9038f67ac44deeef4/markdown_to_mrkdwn-0.3.1-py3-none-any.whl", hash = "sha256:5a6d08f1eaa08aea66953ef0eba206e0bb244d5c62880c76d1e3a11ee46cd3f0", size = 13592, upload-time = "2026-01-05T14:37:28.21Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1022,6 +1031,7 @@ dependencies = [
     { name = "httpx" },
     { name = "litellm" },
     { name = "loguru" },
+    { name = "markdown-to-mrkdwn" },
     { name = "prompt-toolkit" },
     { name = "pydantic" },
     { name = "python-telegram-bot" },
@@ -1068,6 +1078,7 @@ requires-dist = [
     { name = "lark-oapi", marker = "extra == 'feishu'", specifier = ">=1.0" },
     { name = "litellm", specifier = ">=1.55" },
     { name = "loguru", specifier = ">=0.7" },
+    { name = "markdown-to-mrkdwn", specifier = ">=0.3.1" },
     { name = "prompt-toolkit", specifier = ">=3.0" },
     { name = "pyarrow", marker = "extra == 'vector'", specifier = ">=15.0" },
     { name = "pydantic", specifier = ">=2.0" },

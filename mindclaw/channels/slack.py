@@ -1,6 +1,6 @@
-# input: slack-sdk, channels/base.py, bus/events.py
+# input: slack-sdk, channels/base.py, bus/events.py, channels/slack_format.py
 # output: 导出 SlackChannel
-# pos: Slack 渠道实现，使用 Socket Mode (WebSocket) 接收消息
+# pos: Slack 渠道实现，使用 Socket Mode (WebSocket) 接收消息，发送时自动转换 Markdown → Slack mrkdwn
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from loguru import logger
@@ -9,6 +9,7 @@ from mindclaw.bus.events import OutboundMessage
 from mindclaw.bus.queue import MessageBus
 
 from .base import BaseChannel
+from .slack_format import markdown_to_slack
 
 
 class SlackChannel(BaseChannel):
@@ -52,7 +53,7 @@ class SlackChannel(BaseChannel):
         try:
             await self._web_client.chat_postMessage(
                 channel=msg.chat_id,
-                text=msg.text,
+                text=markdown_to_slack(msg.text),
             )
         except Exception:
             logger.exception(f"Failed to send Slack message to channel {msg.chat_id}")
