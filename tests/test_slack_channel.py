@@ -3,12 +3,38 @@
 # pos: Slack 渠道单元测试
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
+import sys
+import types
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from mindclaw.bus.events import OutboundMessage
 from mindclaw.bus.queue import MessageBus
+
+
+def _ensure_slack_sdk_mocked():
+    """Ensure slack_sdk modules are available (mocked) for testing."""
+    if "slack_sdk" in sys.modules:
+        return
+    slack_sdk = types.ModuleType("slack_sdk")
+    socket_mode = types.ModuleType("slack_sdk.socket_mode")
+    response_mod = types.ModuleType("slack_sdk.socket_mode.response")
+
+    class SocketModeResponse:
+        def __init__(self, envelope_id: str) -> None:
+            self.envelope_id = envelope_id
+
+    response_mod.SocketModeResponse = SocketModeResponse
+    socket_mode.response = response_mod
+    slack_sdk.socket_mode = socket_mode
+
+    sys.modules["slack_sdk"] = slack_sdk
+    sys.modules["slack_sdk.socket_mode"] = socket_mode
+    sys.modules["slack_sdk.socket_mode.response"] = response_mod
+
+
+_ensure_slack_sdk_mocked()
 
 
 def test_slack_channel_init():

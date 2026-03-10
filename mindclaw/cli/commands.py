@@ -30,13 +30,19 @@ def chat(
 @app.command()
 def serve(
     config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+    channels: str = typer.Option(
+        "gateway,telegram",
+        "--channels",
+        help="Comma-separated channel names (e.g. gateway,slack,telegram)",
+    ),
 ) -> None:
-    """Start Gateway + remote channels (Telegram, etc.)."""
+    """Start Gateway + remote channels."""
     from mindclaw.app import MindClawApp
 
     cfg = load_config(config)
+    channel_list = [ch.strip() for ch in channels.split(",") if ch.strip()]
     mindclaw_app = MindClawApp(cfg)
-    asyncio.run(mindclaw_app.run(["gateway", "telegram"]))
+    asyncio.run(mindclaw_app.run(channel_list))
 
 
 @app.command("secret-set")

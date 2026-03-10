@@ -3,12 +3,49 @@
 # pos: 飞书渠道单元测试
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-from unittest.mock import MagicMock
+import sys
+import types
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from mindclaw.bus.events import OutboundMessage
 from mindclaw.bus.queue import MessageBus
+
+
+def _ensure_lark_oapi_mocked():
+    """Ensure lark_oapi modules are available (mocked) for testing."""
+    if "lark_oapi" in sys.modules:
+        return
+
+    lark_oapi = types.ModuleType("lark_oapi")
+    api = types.ModuleType("lark_oapi.api")
+    im = types.ModuleType("lark_oapi.api.im")
+    v1 = types.ModuleType("lark_oapi.api.im.v1")
+
+    class _Builder:
+        @classmethod
+        def builder(cls):
+            return cls()
+
+        def __getattr__(self, name):
+            def method(*args, **kwargs):
+                return self
+            return method
+
+        def build(self):
+            return MagicMock()
+
+    v1.CreateMessageRequest = _Builder
+    v1.CreateMessageRequestBody = _Builder
+
+    sys.modules["lark_oapi"] = lark_oapi
+    sys.modules["lark_oapi.api"] = api
+    sys.modules["lark_oapi.api.im"] = im
+    sys.modules["lark_oapi.api.im.v1"] = v1
+
+
+_ensure_lark_oapi_mocked()
 
 
 def test_feishu_channel_init():
@@ -138,15 +175,19 @@ async def test_feishu_send():
 
     bus = MessageBus()
     ch = FeishuChannel(bus=bus, app_id="fake-id", app_secret="fake-secret")
+
+    # Build a mock api_client where im.v1.message.create returns a success response
+    mock_response = MagicMock()
+    mock_response.success.return_value = True
+    mock_create = MagicMock(return_value=mock_response)
+
     ch._api_client = MagicMock()
-    ch._api_client.im.v1.message.create = MagicMock(
-        return_value=MagicMock(success=MagicMock(return_value=True))
-    )
+    ch._api_client.im.v1.message.create = mock_create
 
     msg = OutboundMessage(channel="feishu", chat_id="oc_123456", text="reply text")
     await ch.send(msg)
 
-    ch._api_client.im.v1.message.create.assert_called_once()
+    mock_create.assert_called_once()
 
 
 @pytest.mark.asyncio

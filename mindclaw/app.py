@@ -138,9 +138,9 @@ class MindClawApp:
         )
         self.tool_registry.register(WebFetchTool())
 
-        brave_settings = self.config.providers.get("brave")
-        if brave_settings and brave_settings.api_key:
-            self.tool_registry.register(WebSearchTool(api_key=brave_settings.api_key))
+        tavily_settings = self.config.providers.get("tavily")
+        if tavily_settings and tavily_settings.api_key:
+            self.tool_registry.register(WebSearchTool(api_key=tavily_settings.api_key))
 
         self.tool_registry.register(MessageUserTool(
             bus=self.bus,

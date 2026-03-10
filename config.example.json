@@ -9,7 +9,8 @@
     }
   },
   "providers": {
-    "anthropic": { "apiKey": "$ANTHROPIC_API_KEY" }
+    "anthropic": { "apiKey": "$ANTHROPIC_API_KEY" },
+    "tavily": { "apiKey": "$TAVILY_API_KEY" }
   },
   "tools": { "execTimeout": 30 },
   "knowledge": { "dataDir": "data" }

@@ -103,7 +103,7 @@ class WebFetchTool(Tool):
 
 class WebSearchTool(Tool):
     name = "web_search"
-    description = "Search the web using Brave Search API."
+    description = "Search the web using Tavily Search API."
     parameters = {
         "type": "object",
         "properties": {
@@ -124,26 +124,27 @@ class WebSearchTool(Tool):
             return "Error: web search API key not configured"
         logger.info(f"Searching: {query}")
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(
-                    "https://api.search.brave.com/res/v1/web/search",
-                    params={"q": query, "count": count},
-                    headers={
-                        "Accept": "application/json",
-                        "X-Subscription-Token": self.api_key,
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    "https://api.tavily.com/search",
+                    json={
+                        "api_key": self.api_key,
+                        "query": query,
+                        "max_results": count,
+                        "include_answer": False,
                     },
                 )
             if resp.status_code != 200:
                 return f"Error: search API returned HTTP {resp.status_code}"
             data = resp.json()
-            results = data.get("web", {}).get("results", [])
+            results = data.get("results", [])
             if not results:
                 return "No results found."
             lines = []
             for r in results:
                 lines.append(f"**{r['title']}**")
                 lines.append(f"  URL: {r['url']}")
-                lines.append(f"  {r.get('description', '')}")
+                lines.append(f"  {r.get('content', '')[:200]}")
                 lines.append("")
             return "\n".join(lines).strip()
         except Exception as e:

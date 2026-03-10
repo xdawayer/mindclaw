@@ -30,11 +30,11 @@ class SlackChannel(BaseChannel):
         self._socket_client = None
 
     async def start(self) -> None:
-        from slack_sdk.socket_mode.aio import AsyncSocketModeClient
+        from slack_sdk.socket_mode.aiohttp import SocketModeClient
         from slack_sdk.web.async_client import AsyncWebClient
 
         self._web_client = AsyncWebClient(token=self._bot_token)
-        self._socket_client = AsyncSocketModeClient(
+        self._socket_client = SocketModeClient(
             app_token=self._app_token,
             web_client=self._web_client,
         )
@@ -71,6 +71,10 @@ class SlackChannel(BaseChannel):
 
         # Only handle plain user messages (no subtype = no bot_message, channel_join, etc.)
         if event.get("type") != "message" or "subtype" in event:
+            return
+
+        # Ignore messages from bots (including our own)
+        if event.get("bot_id") or event.get("bot_profile"):
             return
 
         text = event.get("text", "")

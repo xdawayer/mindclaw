@@ -64,7 +64,30 @@ class AgentLoop:
             while cutoff > 0 and history[cutoff].get("role") != "user":
                 cutoff -= 1
             history = history[cutoff:]
-        return history
+        return self._sanitize_history(history)
+
+    @staticmethod
+    def _sanitize_history(history: list[dict]) -> list[dict]:
+        """Remove orphaned tool messages that lack a preceding tool_calls assistant message."""
+        result: list[dict] = []
+        pending_tool_call_ids: set[str] = set()
+        for msg in history:
+            role = msg.get("role")
+            if role == "assistant" and msg.get("tool_calls"):
+                pending_tool_call_ids = {
+                    tc.get("id", "") for tc in msg["tool_calls"] if isinstance(tc, dict)
+                }
+                result.append(msg)
+            elif role == "tool":
+                tc_id = msg.get("tool_call_id", "")
+                if tc_id in pending_tool_call_ids:
+                    result.append(msg)
+                    pending_tool_call_ids.discard(tc_id)
+                # else: orphaned tool message, skip it
+            else:
+                pending_tool_call_ids = set()
+                result.append(msg)
+        return result
 
     async def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
         system_prompt = await self.context_builder.abuild_system_prompt(
