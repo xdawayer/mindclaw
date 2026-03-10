@@ -5,7 +5,7 @@
 | 文件 | 地位 | 功能 |
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
-| `agent_loop.py` | 核心 | AgentLoop 主推理循环 (ReAct)，含工具调用集成、危险工具拦截、审批工作流集成、历史消息裁剪、SessionStore 持久化、ContextBuilder 动态系统提示、自动记忆整合触发、会话中毒保护 (错误时不持久化)、message_user 上下文同步、cron 执行约束 (blocked_tools/max_iterations/timeout) |
+| `agent_loop.py` | 核心 | AgentLoop 主推理循环 (ReAct)，含工具调用集成、危险工具拦截、审批工作流集成、历史消息裁剪、SessionStore 持久化、ContextBuilder 动态系统提示、自动记忆整合触发、会话中毒保护 (错误时不持久化)、message_user 上下文同步、cron 执行约束 (blocked_tools/max_iterations/timeout)、per-tool max_result_chars 覆盖 |
 | `context.py` | 核心 | ContextBuilder 动态构建系统提示，注入记忆 (MEMORY.md)、当前日期、可选技能摘要 (skill_registry)、always 技能内容、向量语义搜索结果 (abuild_system_prompt) |
 | `acp.py` | 核心 | ACP 协议 - AgentHandle 管理子 Agent 进程生命周期 (asyncio.subprocess + JSON stdin/stdout)，TaskRequest/TaskResult 数据类，AgentStatus 枚举 |
 | `subagent.py` | 核心 | SubAgentManager 子 Agent 管理器 - 并发控制 (默认 max 3)、任务派发、结果汇总、超时管理 |
@@ -13,3 +13,4 @@
 | `cron_scheduler.py` | 核心 | CronScheduler - 后台 asyncio 任务，定期检查 cron 表达式，触发到期任务回调 |
 | `cron_store.py` | 核心 | CronTaskStore - cron 任务持久化层，asyncio.Lock + 原子写入 (.tmp + rename)，供 scheduler 和 tools 共享 |
 | `cron_context.py` | 辅助 | CronExecutionConstraints - 无人值守 cron 执行约束 (max_iterations/timeout/blocked_tools)，parse 函数 |
+| `cron_logger.py` | 辅助 | CronRunLogger - 追加写入 cron_runs.jsonl，log_run() 写入执行记录，recent_runs() 读取并过滤 |

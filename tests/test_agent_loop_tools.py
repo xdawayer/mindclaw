@@ -239,3 +239,104 @@ async def test_dangerous_tool_no_approval_manager_still_works():
     agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
     result = await agent._execute_tool("exec", '{"command": "ls"}')
     assert result == "executed"
+
+
+# ---------------------------------------------------------------------------
+# Phase 0g: Per-tool max_result_chars
+# ---------------------------------------------------------------------------
+
+
+def test_tool_base_default_max_result_chars_is_none():
+    """Tool ABC should define max_result_chars = None by default."""
+    from mindclaw.tools.base import RiskLevel, Tool
+
+    class MinimalTool(Tool):
+        name = "minimal"
+        description = "A minimal tool"
+        parameters = {"type": "object", "properties": {}}
+        risk_level = RiskLevel.SAFE
+
+        async def execute(self, params: dict) -> str:
+            return "result"
+
+    tool = MinimalTool()
+    assert tool.max_result_chars is None
+
+
+@pytest.mark.asyncio
+async def test_tool_with_custom_max_chars_overrides_config():
+    """When tool.max_result_chars is set, it must be used instead of config default."""
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+    from mindclaw.tools.base import RiskLevel, Tool
+
+    class LongOutputTool(Tool):
+        name = "long_output"
+        description = "Returns a long string"
+        parameters = {"type": "object", "properties": {}}
+        risk_level = RiskLevel.SAFE
+        max_result_chars = 20  # per-tool limit: 20 chars
+
+        async def execute(self, params: dict) -> str:
+            return "A" * 100  # 100 chars
+
+    # Config default is 500, but tool-level is 20
+    config = MindClawConfig()
+    assert config.tools.tool_result_max_chars == 500
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(LongOutputTool())
+
+    agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
+    result = await agent._execute_tool("long_output", "{}")
+
+    # Result must be capped at 20 chars (plus truncation suffix)
+    assert "A" * 20 in result
+    assert "A" * 21 not in result
+    assert "truncated" in result
+
+
+@pytest.mark.asyncio
+async def test_tool_without_max_chars_uses_config_default():
+    """When tool.max_result_chars is None, config.tools.tool_result_max_chars is used."""
+    from mindclaw.orchestrator.agent_loop import AgentLoop
+    from mindclaw.tools.base import RiskLevel, Tool
+
+    class DefaultTool(Tool):
+        name = "default_output"
+        description = "No per-tool limit"
+        parameters = {"type": "object", "properties": {}}
+        risk_level = RiskLevel.SAFE
+        # max_result_chars deliberately not set (inherits None)
+
+        async def execute(self, params: dict) -> str:
+            return "B" * 600  # 600 chars, over default 500
+
+    config = MindClawConfig()
+    assert config.tools.tool_result_max_chars == 500
+    bus = MessageBus()
+    router = LLMRouter(config)
+    registry = ToolRegistry()
+    registry.register(DefaultTool())
+
+    agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
+    result = await agent._execute_tool("default_output", "{}")
+
+    # Result must be capped at config default (500 chars)
+    assert "B" * 500 in result
+    assert "B" * 501 not in result
+    assert "truncated" in result
+
+
+def test_web_fetch_has_custom_max_chars():
+    """WebFetchTool.max_result_chars class attribute must be 5000."""
+    from mindclaw.tools.web import WebFetchTool
+
+    assert WebFetchTool.max_result_chars == 5000
+
+
+def test_web_search_has_custom_max_chars():
+    """WebSearchTool.max_result_chars class attribute must be 3000."""
+    from mindclaw.tools.web import WebSearchTool
+
+    assert WebSearchTool.max_result_chars == 3000

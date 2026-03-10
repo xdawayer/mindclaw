@@ -16,7 +16,7 @@
 | `test_tools_shell.py` | 单元测试 | 工具层 Shell 执行 (ExecTool) 测试 |
 | `test_tools_web.py` | 单元测试 | 工具层网页操作 (WebFetchTool 流式抓取 / SSRF 防护 / WebSearchTool) 测试 |
 | `test_tools_file_ops.py` | 单元测试 | 工具层文件操作 (ReadFile/WriteFile/EditFile/ListDir + 路径沙箱) 测试 |
-| `test_agent_loop_tools.py` | 集成测试 | 编排层 Agent Loop 工具调用集成 (ReAct 循环 + 最大迭代 + 危险工具拦截) 测试 |
+| `test_agent_loop_tools.py` | 集成测试 | 编排层 Agent Loop 工具调用集成 (ReAct 循环 + 最大迭代 + 危险工具拦截 + per-tool max_result_chars) 测试 |
 | `test_security_sandbox.py` | 单元测试 | 安全层沙箱 (is_command_denied 命令黑名单 / validate_path 路径沙箱) 测试 |
 | `test_security_approval.py` | 单元测试 | 安全层审批工作流 (ApprovalManager 审批/拒绝/超时/生命周期) 测试 |
 | `test_message_routing.py` | 单元测试 | 消息路由测试 (审批回复路由到 ApprovalManager / 端到端审批流) |
@@ -63,3 +63,4 @@
 | `test_skill_tools.py` | 单元测试 | 技能管理工具 (search/install/remove/list/show) 测试 |
 | `test_skill_cli.py` | 单元测试 | 技能 CLI 子命令测试 |
 | `test_skills_config.py` | 单元测试 | SkillsConfig Pydantic 配置测试 |
+| `test_cron_logger.py` | 单元测试 | CronRunLogger (文件创建/追加写入/读取/task_name过滤/limit截断/空文件/不存在文件/JSON格式) 测试 |

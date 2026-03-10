@@ -1,8 +1,9 @@
 # input: pydantic
 # output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ChannelConfig, ProviderSettings,
 #         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig,
-#         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig, SkillsConfig
-# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置和技能安装配置)
+#         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig, SkillsConfig,
+#         AuthProfileConfig
+# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置、技能安装配置、API 调用鉴权配置)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from typing import Literal
@@ -58,11 +59,25 @@ class ProviderSettings(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class AuthProfileConfig(BaseModel):
+    profile_type: Literal["bearer", "header", "basic"] = Field(alias="profileType")
+    header_name: str = Field(default="Authorization", alias="headerName")
+    value: str = Field(min_length=1)
+
+    model_config = {"populate_by_name": True}
+
+
 class ToolsConfig(BaseModel):
     exec_timeout: int = Field(default=30, alias="execTimeout")
     tool_result_max_chars: int = Field(default=500, alias="toolResultMaxChars")
     restrict_to_workspace: bool = Field(default=True, alias="restrictToWorkspace")
     allow_dangerous_tools: bool = Field(default=False, alias="allowDangerousTools")
+    api_call_auth_profiles: dict[str, AuthProfileConfig] = Field(
+        default_factory=dict, alias="apiCallAuthProfiles"
+    )
+    api_call_url_allowlist: list[str] = Field(
+        default_factory=list, alias="apiCallUrlAllowlist"
+    )
 
     model_config = {"populate_by_name": True}
 

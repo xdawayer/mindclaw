@@ -1,44 +1,21 @@
-# input: tools/base.py, httpx, ipaddress, socket, knowledge/_text_utils.py
+# input: tools/base.py, tools/_ssrf.py, httpx, knowledge/_text_utils.py
 # output: 导出 WebSearchTool, WebFetchTool
 # pos: 网页搜索和抓取工具，含 SSRF 防护
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-import ipaddress
-import socket
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 from loguru import logger
 
 from mindclaw.knowledge._text_utils import html_to_text
 
+from ._ssrf import is_safe_url as _is_safe_url
 from .base import RiskLevel, Tool
 
 MAX_RESPONSE_BYTES = 2_000_000
 MAX_REDIRECTS = 5
 _REDIRECT_CODES = frozenset({301, 302, 303, 307, 308})
-
-
-def _is_safe_url(url: str) -> bool:
-    """Reject URLs targeting private/loopback/link-local/metadata addresses.
-
-    Note: DNS rebinding can bypass this check if the attacker controls DNS.
-    Callers should re-validate at each redirect hop to reduce the window.
-    """
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return False
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-        for _, _, _, _, sockaddr in socket.getaddrinfo(hostname, None):
-            ip = ipaddress.ip_address(sockaddr[0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                return False
-        return True
-    except (socket.gaierror, ValueError, OSError):
-        return False
 
 
 class WebFetchTool(Tool):
@@ -50,9 +27,10 @@ class WebFetchTool(Tool):
         "required": ["url"],
     }
     risk_level = RiskLevel.MODERATE
+    max_result_chars = 5000
 
     def __init__(self, max_chars: int = 5000) -> None:
-        self.max_chars = max_chars
+        self.max_result_chars = max_chars
 
     async def execute(self, params: dict) -> str:
         url = params["url"]
@@ -94,8 +72,8 @@ class WebFetchTool(Tool):
                 text = html_to_text(text_content)
             else:
                 text = text_content
-            if len(text) > self.max_chars:
-                text = text[: self.max_chars] + "\n...(truncated)"
+            if len(text) > self.max_result_chars:
+                text = text[: self.max_result_chars] + "\n...(truncated)"
             return text
         except Exception as e:
             return f"Error fetching URL: {e}"
@@ -113,6 +91,7 @@ class WebSearchTool(Tool):
         "required": ["query"],
     }
     risk_level = RiskLevel.SAFE
+    max_result_chars = 3000
 
     def __init__(self, api_key: str = "") -> None:
         self.api_key = api_key

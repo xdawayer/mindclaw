@@ -2,7 +2,7 @@
 #        orchestrator/subagent.py, security/approval.py, knowledge/session.py,
 #        knowledge/memory.py, knowledge/vector.py, orchestrator/context.py, llm/router.py,
 #        tools/*, gateway/*, plugins/loader.py, plugins/hooks.py,
-#        skills/installer.py, skills/index_client.py
+#        skills/installer.py, skills/index_client.py, tools/api_call.py
 # output: 导出 MindClawApp
 # pos: 顶层编排器，统一管理所有组件的生命周期和消息路由 (含 bounded semaphore 并发控制)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -34,6 +34,7 @@ from mindclaw.security.approval import ApprovalManager
 from mindclaw.skills.index_client import IndexClient
 from mindclaw.skills.installer import SkillInstaller
 from mindclaw.skills.registry import SkillRegistry
+from mindclaw.tools.api_call import ApiCallTool
 from mindclaw.tools.cron import CronAddTool, CronListTool, CronRemoveTool, CronToggleTool
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from mindclaw.tools.memory import MemorySaveTool, MemorySearchTool
@@ -184,6 +185,12 @@ class MindClawApp:
         tavily_settings = self.config.providers.get("tavily")
         if tavily_settings and tavily_settings.api_key:
             self.tool_registry.register(WebSearchTool(api_key=tavily_settings.api_key))
+
+        if self.config.tools.api_call_url_allowlist:
+            self.tool_registry.register(ApiCallTool(
+                url_allowlist=self.config.tools.api_call_url_allowlist,
+                auth_profiles=self.config.tools.api_call_auth_profiles,
+            ))
 
         self.tool_registry.register(MessageUserTool(
             bus=self.bus,

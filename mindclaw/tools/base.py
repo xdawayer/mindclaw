@@ -18,6 +18,7 @@ class Tool(ABC):
     description: str
     parameters: dict
     risk_level: RiskLevel
+    max_result_chars: int | None = None
 
     @abstractmethod
     async def execute(self, params: dict) -> str:

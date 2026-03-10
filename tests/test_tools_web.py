@@ -84,7 +84,7 @@ async def test_web_fetch_rejects_private_url():
     tool = WebFetchTool()
 
     with patch(
-        "mindclaw.tools.web.socket.getaddrinfo",
+        "mindclaw.tools._ssrf.socket.getaddrinfo",
         return_value=[(None, None, None, None, ("127.0.0.1", 0))],
     ):
         result = await tool.execute({"url": "https://internal.corp"})

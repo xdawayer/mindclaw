@@ -207,7 +207,11 @@ class AgentLoop:
                 params = hook_result.get("params", params)
 
             result = await tool.execute(params)
-            max_chars = self.config.tools.tool_result_max_chars
+            max_chars = (
+                tool.max_result_chars
+                if tool.max_result_chars is not None
+                else self.config.tools.tool_result_max_chars
+            )
             if len(result) > max_chars:
                 result = result[:max_chars] + "\n...(truncated)"
 
