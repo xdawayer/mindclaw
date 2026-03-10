@@ -170,7 +170,10 @@ async def _wait_for_callback(
         state = params.get("state", [None])[0]
 
         if code and state == expected_state:
-            body = "<html><body><h2>Authorization successful! You can close this tab.</h2></body></html>"
+            body = (
+                "<html><body><h2>Authorization successful!"
+                " You can close this tab.</h2></body></html>"
+            )
             response = (
                 f"HTTP/1.1 200 OK\r\n"
                 f"Content-Type: text/html\r\n"
@@ -183,7 +186,10 @@ async def _wait_for_callback(
             if not code_future.done():
                 code_future.set_result(code)
         else:
-            body = "<html><body><h2>Authorization failed. State mismatch or missing code.</h2></body></html>"
+            body = (
+                "<html><body><h2>Authorization failed."
+                " State mismatch or missing code.</h2></body></html>"
+            )
             response = (
                 f"HTTP/1.1 400 Bad Request\r\n"
                 f"Content-Type: text/html\r\n"
