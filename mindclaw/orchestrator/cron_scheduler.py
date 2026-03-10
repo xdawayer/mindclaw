@@ -1,50 +1,44 @@
-# input: croniter, json, asyncio, pathlib
+# input: croniter, asyncio, orchestrator/cron_store.py
 # output: 导出 CronScheduler
 # pos: 后台 cron 调度器，按 croniter 表达式定时触发任务
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-"""Background cron scheduler: checks cron_tasks.json and triggers due tasks."""
+"""Background cron scheduler: reads tasks via CronTaskStore and triggers due tasks."""
 
 from __future__ import annotations
 
 import asyncio
-import json
+import inspect
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Awaitable, Callable
 
 from croniter import CroniterBadCronError, croniter
 from loguru import logger
 
-_TASKS_FILE = "cron_tasks.json"
+from mindclaw.orchestrator.cron_store import CronTaskStore
 
-# Callback type: async def on_trigger(name: str, action: str) -> None
-OnTriggerCallback = Callable[[str, str], Awaitable[None] | None]
+# Callback receives (task_id, full_task_dict) so caller can read notify_channel etc.
+OnTriggerCallback = Callable[[str, dict], Awaitable[None] | None]
 
 
 class CronScheduler:
-    """Background scheduler that checks cron_tasks.json and triggers due tasks."""
+    """Background scheduler that reads tasks via CronTaskStore and triggers due tasks."""
 
     def __init__(
         self,
-        data_dir: Path,
+        store: CronTaskStore,
         on_trigger: OnTriggerCallback,
         check_interval: float = 60.0,
     ) -> None:
-        self._data_dir = data_dir
+        self._store = store
         self._on_trigger = on_trigger
         self._check_interval = check_interval
         self._task: asyncio.Task | None = None
         self._running = False
-        self._file_lock = asyncio.Lock()
 
     @property
     def is_running(self) -> bool:
         return self._running
-
-    @property
-    def task_count(self) -> int:
-        return len(self._load_tasks())
 
     async def start(self) -> None:
         self._running = True
@@ -64,30 +58,17 @@ class CronScheduler:
 
     async def check_once(self) -> None:
         """Run a single check cycle (for testing)."""
-        async with self._file_lock:
-            tasks = self._load_tasks()
-            now = datetime.now()
+        tasks = await self._store.load()
+        now = datetime.now()
 
-            for task_id, task in tasks.items():
-                if self._is_due(task, now):
-                    await self._trigger(task_id, task, now)
+        for task_id, task in tasks.items():
+            if not task.get("enabled", True):
+                continue
+            if self._is_due(task, now):
+                await self._trigger(task_id, task, now)
 
-    def _load_tasks(self) -> dict[str, Any]:
-        tasks_file = self._data_dir / _TASKS_FILE
-        if not tasks_file.exists():
-            return {}
-        try:
-            return json.loads(tasks_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            logger.warning("Failed to read cron_tasks.json")
-            return {}
-
-    def _save_tasks(self, tasks: dict) -> None:
-        self._data_dir.mkdir(parents=True, exist_ok=True)
-        tasks_file = self._data_dir / _TASKS_FILE
-        tasks_file.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    def _is_due(self, task: dict, now: datetime) -> bool:
+    @staticmethod
+    def _is_due(task: dict, now: datetime) -> bool:
         """Check if a task is due to run based on its cron expression and last_run."""
         try:
             cron_expr = task["cron_expr"]
@@ -96,7 +77,7 @@ class CronScheduler:
             if last_run_str:
                 last_run = datetime.fromisoformat(last_run_str)
             else:
-                # Never run before — use created_at as baseline so task
+                # Never run before -- use created_at as baseline so task
                 # waits until its first scheduled time after creation.
                 created_str = task.get("created_at")
                 if created_str:
@@ -111,24 +92,20 @@ class CronScheduler:
             return False
 
     async def _trigger(self, task_id: str, task: dict, now: datetime) -> None:
-        name = task["name"]
-        action = task["action"]
+        name = task.get("name", task_id)
 
         logger.info(f"Cron trigger: {name} ({task_id})")
 
         try:
-            result = self._on_trigger(name, action)
-            if asyncio.iscoroutine(result) or asyncio.isfuture(result):
+            result = self._on_trigger(task_id, task)
+            if inspect.isawaitable(result):
                 await result
         except Exception:
             logger.exception(f"Cron task '{name}' failed")
-            return  # Don't update last_run on failure — task will retry next cycle
+            return  # Don't update last_run on failure -- task will retry next cycle
 
         # Update last_run only on success
-        tasks = self._load_tasks()
-        if task_id in tasks:
-            tasks[task_id]["last_run"] = now.isoformat()
-            self._save_tasks(tasks)
+        await self._store.update_last_run(task_id, now.isoformat())
 
     async def _loop(self) -> None:
         while self._running:

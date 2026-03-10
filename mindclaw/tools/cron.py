@@ -1,36 +1,20 @@
-# input: tools/base.py, croniter, json, pathlib
-# output: 导出 CronAddTool, CronListTool, CronRemoveTool
-# pos: 定时任务工具，管理 cron 任务的 CRUD 和持久化
+# input: tools/base.py, croniter, orchestrator/cron_store.py
+# output: 导出 CronAddTool, CronListTool, CronRemoveTool, CronToggleTool
+# pos: 定时任务工具，通过 CronTaskStore 管理 cron 任务的 CRUD
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-"""Cron task management tools: add, list, remove scheduled tasks."""
+"""Cron task management tools: add, list, remove, toggle scheduled tasks."""
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime
-from pathlib import Path
 
 from croniter import CroniterBadCronError, croniter
 from loguru import logger
 
+from mindclaw.orchestrator.cron_store import CronTaskStore
 from mindclaw.tools.base import RiskLevel, Tool
-
-_TASKS_FILE = "cron_tasks.json"
-
-
-def _load_tasks(data_dir: Path) -> dict:
-    tasks_file = data_dir / _TASKS_FILE
-    if not tasks_file.exists():
-        return {}
-    return json.loads(tasks_file.read_text(encoding="utf-8"))
-
-
-def _save_tasks(data_dir: Path, tasks: dict) -> None:
-    data_dir.mkdir(parents=True, exist_ok=True)
-    tasks_file = data_dir / _TASKS_FILE
-    tasks_file.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 class CronAddTool(Tool):
@@ -48,13 +32,29 @@ class CronAddTool(Tool):
                 "type": "string",
                 "description": "What to do when triggered (natural language instruction)",
             },
+            "notify_channel": {
+                "type": "string",
+                "description": "Channel to send results to (e.g. telegram, slack, feishu)",
+            },
+            "notify_chat_id": {
+                "type": "string",
+                "description": "Chat ID to send results to",
+            },
+            "max_iterations": {
+                "type": "integer",
+                "description": "Max agent iterations for this task (default 15)",
+            },
+            "timeout": {
+                "type": "integer",
+                "description": "Timeout in seconds (default 300)",
+            },
         },
         "required": ["name", "cron_expr", "action"],
     }
     risk_level = RiskLevel.MODERATE
 
-    def __init__(self, data_dir: Path) -> None:
-        self._data_dir = data_dir
+    def __init__(self, store: CronTaskStore) -> None:
+        self._store = store
 
     async def execute(self, params: dict) -> str:
         name = params["name"]
@@ -68,23 +68,29 @@ class CronAddTool(Tool):
         except (CroniterBadCronError, ValueError, KeyError):
             return f"Error: Invalid cron expression '{cron_expr}'"
 
-        tasks = _load_tasks(self._data_dir)
-
-        # Check for duplicate name
-        for task in tasks.values():
-            if task["name"] == name:
-                return f"Error: Task with name '{name}' already exists"
-
         task_id = f"cron_{uuid.uuid4().hex[:8]}"
-        tasks[task_id] = {
+        task_dict: dict = {
             "name": name,
             "cron_expr": cron_expr,
             "action": action,
             "created_at": datetime.now().isoformat(),
             "last_run": None,
+            "enabled": True,
         }
 
-        _save_tasks(self._data_dir, tasks)
+        # Optional fields
+        for key in ("notify_channel", "notify_chat_id"):
+            if params.get(key):
+                task_dict[key] = params[key]
+        if "max_iterations" in params:
+            task_dict["max_iterations"] = params["max_iterations"]
+        if "timeout" in params:
+            task_dict["timeout"] = params["timeout"]
+
+        # Atomic check-and-add to prevent TOCTOU race on duplicate names
+        added = await self._store.add_if_name_unique(task_id, task_dict)
+        if not added:
+            return f"Error: Task with name '{name}' already exists"
         logger.info(f"Cron task added: {name} ({cron_expr})")
 
         return (
@@ -99,11 +105,11 @@ class CronListTool(Tool):
     parameters = {"type": "object", "properties": {}}
     risk_level = RiskLevel.SAFE
 
-    def __init__(self, data_dir: Path) -> None:
-        self._data_dir = data_dir
+    def __init__(self, store: CronTaskStore) -> None:
+        self._store = store
 
     async def execute(self, params: dict) -> str:
-        tasks = _load_tasks(self._data_dir)
+        tasks = await self._store.load()
 
         if not tasks:
             return "No scheduled tasks."
@@ -117,10 +123,15 @@ class CronListTool(Tool):
                 next_run = "invalid"
 
             last_run = task.get("last_run") or "never"
+            enabled = task.get("enabled", True)
+            status = "on" if enabled else "OFF"
+            notify = task.get("notify_channel", "")
+            notify_suffix = f" -> {notify}" if notify else ""
+
             lines.append(
-                f"- [{task_id}] {task['name']}: {task['cron_expr']} "
+                f"- [{task_id}] {task['name']} [{status}]: {task['cron_expr']} "
                 f"| action: {task['action']} "
-                f"| next: {next_run} | last: {last_run}"
+                f"| next: {next_run} | last: {last_run}{notify_suffix}"
             )
 
         return "\n".join(lines)
@@ -138,18 +149,45 @@ class CronRemoveTool(Tool):
     }
     risk_level = RiskLevel.MODERATE
 
-    def __init__(self, data_dir: Path) -> None:
-        self._data_dir = data_dir
+    def __init__(self, store: CronTaskStore) -> None:
+        self._store = store
 
     async def execute(self, params: dict) -> str:
         task_id = params["task_id"]
-        tasks = _load_tasks(self._data_dir)
+        removed = await self._store.remove(task_id)
 
-        if task_id not in tasks:
+        if removed is None:
             return f"Error: Task '{task_id}' not found"
 
-        removed = tasks.pop(task_id)
-        _save_tasks(self._data_dir, tasks)
         logger.info(f"Cron task removed: {removed['name']} ({task_id})")
-
         return f"Task '{removed['name']}' (ID: {task_id}) removed."
+
+
+class CronToggleTool(Tool):
+    name = "cron_toggle"
+    description = "Enable or disable a scheduled cron task"
+    parameters = {
+        "type": "object",
+        "properties": {
+            "task_id": {"type": "string", "description": "The task ID to toggle"},
+            "enabled": {"type": "boolean", "description": "True to enable, False to disable"},
+        },
+        "required": ["task_id", "enabled"],
+    }
+    risk_level = RiskLevel.MODERATE
+
+    def __init__(self, store: CronTaskStore) -> None:
+        self._store = store
+
+    async def execute(self, params: dict) -> str:
+        task_id = params["task_id"]
+        enabled = params["enabled"]
+
+        task = await self._store.get(task_id)
+        if task is None:
+            return f"Error: Task '{task_id}' not found"
+
+        await self._store.set_enabled(task_id, enabled)
+        state = "enabled" if enabled else "disabled"
+        logger.info(f"Cron task {state}: {task['name']} ({task_id})")
+        return f"Task '{task['name']}' (ID: {task_id}) {state}."

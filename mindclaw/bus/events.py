@@ -17,6 +17,7 @@ class InboundMessage:
     text: str
     reply_to: str | None = None
     attachments: list = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
 
     @property

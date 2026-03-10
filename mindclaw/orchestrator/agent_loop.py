@@ -1,10 +1,12 @@
 # input: bus/queue.py, bus/events.py, llm/router.py, config/schema.py,
 #        tools/registry.py, security/approval.py, knowledge/session.py,
-#        knowledge/memory.py, orchestrator/context.py, plugins/hooks.py
+#        knowledge/memory.py, orchestrator/context.py, orchestrator/cron_context.py,
+#        plugins/hooks.py
 # output: 导出 AgentLoop
-# pos: 编排层核心，ReAct 推理循环 (含工具调用 + before_tool/after_tool hooks)
+# pos: 编排层核心，ReAct 推理循环 (含工具调用 + cron 执行约束 + before_tool/after_tool hooks)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -17,6 +19,10 @@ from mindclaw.knowledge.memory import MemoryManager
 from mindclaw.knowledge.session import SessionStore
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.context import ContextBuilder
+from mindclaw.orchestrator.cron_context import (
+    CronExecutionConstraints,
+    parse_cron_constraints_if_cron,
+)
 from mindclaw.plugins.hooks import HookRegistry
 from mindclaw.security.approval import ApprovalManager
 from mindclaw.tools.base import RiskLevel
@@ -98,10 +104,80 @@ class AgentLoop:
         messages.append({"role": "user", "content": user_text})
         return messages
 
-    async def _execute_tool(self, name: str, arguments: str) -> str:
+    async def _run_agent_loop(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None,
+        max_iterations: int,
+        routed_model: str,
+        cron_constraints: CronExecutionConstraints | None = None,
+        timeout_seconds: float | None = None,
+    ) -> str:
+        """Core ReAct loop, optionally wrapped with asyncio timeout."""
+        coro = self._agent_loop_inner(
+            messages, tools, max_iterations, routed_model, cron_constraints,
+        )
+        if timeout_seconds is not None:
+            return await asyncio.wait_for(coro, timeout=timeout_seconds)
+        return await coro
+
+    async def _agent_loop_inner(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None,
+        max_iterations: int,
+        routed_model: str,
+        cron_constraints: CronExecutionConstraints | None = None,
+    ) -> str:
+        """Inner ReAct loop (tool calls + LLM turns)."""
+        iteration = 0
+        while iteration < max_iterations:
+            iteration += 1
+            result = await self.router.chat(
+                messages=messages, tools=tools, model=routed_model,
+            )
+
+            if not result.tool_calls:
+                return result.content or "(no response)"
+
+            assistant_msg = {"role": "assistant", "content": result.content, "tool_calls": []}
+            for tc in result.tool_calls:
+                assistant_msg["tool_calls"].append({
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                })
+            messages.append(assistant_msg)
+
+            for tc in result.tool_calls:
+                logger.info(f"Tool call: {tc.function.name}")
+                tool_result = await self._execute_tool(
+                    tc.function.name, tc.function.arguments, cron_constraints,
+                )
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": tool_result,
+                })
+
+        return (
+            f"I reached the max iterations ({max_iterations}) "
+            "and couldn't complete the task."
+        )
+
+    async def _execute_tool(
+        self,
+        name: str,
+        arguments: str,
+        cron_constraints: CronExecutionConstraints | None = None,
+    ) -> str:
         tool = self.tool_registry.get(name)
         if tool is None:
             return f"Error: unknown tool '{name}'"
+        # Cron constraint: block restricted tools
+        if cron_constraints and cron_constraints.is_tool_blocked(name):
+            logger.warning(f"Cron constraints blocked tool '{name}'")
+            return f"Error: tool '{name}' is not allowed in cron execution"
         if tool.risk_level == RiskLevel.DANGEROUS:
             if not self.config.tools.allow_dangerous_tools:
                 logger.warning(f"Blocked DANGEROUS tool '{name}' - not enabled")
@@ -148,11 +224,36 @@ class AgentLoop:
 
     async def handle_message(self, inbound: InboundMessage) -> None:
         session_key = inbound.session_key
-        self._current_channel = inbound.channel
-        self._current_chat_id = inbound.chat_id
+
+        # Cron notification routing: only honor metadata from trusted cron source
+        is_cron = inbound.channel == "system" and inbound.user_id == "cron"
+        notify_channel = ""
+        notify_chat_id = ""
+        if is_cron:
+            notify_channel = inbound.metadata.get("notify_channel", "")
+            notify_chat_id = inbound.metadata.get("notify_chat_id", "")
+
+        if notify_channel:
+            self._current_channel = notify_channel
+            self._current_chat_id = notify_chat_id
+        else:
+            self._current_channel = inbound.channel
+            self._current_chat_id = inbound.chat_id
+
+        # Parse cron execution constraints (returns None for non-cron messages)
+        cron_constraints = parse_cron_constraints_if_cron(
+            channel=inbound.channel,
+            user_id=inbound.user_id,
+            metadata=inbound.metadata,
+        )
+
         history = self._get_history(session_key)
         initial_history_len = len(history)
-        max_iterations = max(1, self.config.agent.max_iterations)
+        max_iterations = (
+            cron_constraints.max_iterations
+            if cron_constraints
+            else max(1, self.config.agent.max_iterations)
+        )
 
         messages = await self._build_messages(history, inbound.text)
         tools = self.tool_registry.to_openai_tools() or None
@@ -162,50 +263,32 @@ class AgentLoop:
 
         category = classify_intent(inbound.text)
         routed_model = self.router.resolve_model_for_task(category)
-        # Only pass explicit model when routing selects non-default,
-        # so the fallback mechanism in LLMRouter.chat() remains active.
-        use_model: str | None = None
-        if routed_model != self.config.agent.default_model:
-            use_model = routed_model
         logger.info(
             f"Agent processing: session={session_key}, user={inbound.username}, "
             f"category={category}, model={routed_model}"
         )
 
         try:
-            iteration = 0
-            while iteration < max_iterations:
-                iteration += 1
-                result = await self.router.chat(
-                    messages=messages, tools=tools, model=use_model,
-                )
-
-                if not result.tool_calls:
-                    reply_text = result.content or "(no response)"
-                    break
-
-                assistant_msg = {"role": "assistant", "content": result.content, "tool_calls": []}
-                for tc in result.tool_calls:
-                    assistant_msg["tool_calls"].append({
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                    })
-                messages.append(assistant_msg)
-
-                for tc in result.tool_calls:
-                    logger.info(f"Tool call: {tc.function.name}")
-                    tool_result = await self._execute_tool(tc.function.name, tc.function.arguments)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": tool_result,
-                    })
-            else:
-                reply_text = (
-                    f"I reached the max iterations ({max_iterations}) "
-                    "and couldn't complete the task."
-                )
+            reply_text = await self._run_agent_loop(
+                messages=messages,
+                tools=tools,
+                max_iterations=max_iterations,
+                routed_model=routed_model,
+                cron_constraints=cron_constraints,
+                timeout_seconds=(
+                    cron_constraints.timeout_seconds if cron_constraints else None
+                ),
+            )
+        except asyncio.TimeoutError:
+            # Do not persist partial state from timed-out execution
+            logger.warning(f"Cron task timed out: session={session_key}")
+            out_channel = notify_channel or inbound.channel
+            out_chat_id = notify_chat_id or inbound.chat_id
+            if out_channel != "system":
+                await self.bus.put_outbound(OutboundMessage(
+                    channel=out_channel, chat_id=out_chat_id, text="Cron task timed out.",
+                ))
+            return
         except Exception:
             # Session poisoning protection: new messages are NOT persisted
             # because append() only runs after successful completion
@@ -224,10 +307,22 @@ class AgentLoop:
             except Exception:
                 logger.exception("Auto-consolidation failed")
 
-        outbound = OutboundMessage(
-            channel=inbound.channel,
-            chat_id=inbound.chat_id,
-            text=reply_text,
-        )
-        await self.bus.put_outbound(outbound)
-        logger.info(f"Agent replied: session={session_key}, iterations={iteration}")
+        # Route outbound to notify channel if set, otherwise to inbound channel
+        out_channel = notify_channel or inbound.channel
+        out_chat_id = notify_chat_id or inbound.chat_id
+
+        # Skip putting outbound if destination is "system" (no registered channel)
+        if out_channel == "system":
+            logger.warning(
+                f"Cron task output has no notify_channel, skipping outbound: "
+                f"session={session_key}"
+            )
+        else:
+            outbound = OutboundMessage(
+                channel=out_channel,
+                chat_id=out_chat_id,
+                text=reply_text,
+            )
+            await self.bus.put_outbound(outbound)
+
+        logger.info(f"Agent replied: session={session_key}")

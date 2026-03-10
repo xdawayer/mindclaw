@@ -47,3 +47,19 @@
 | `test_knowledge_obsidian.py` | 单元测试 | ObsidianKnowledge (读写/搜索/列出/标签含YAML list/链接/路径安全) 测试 |
 | `test_knowledge_notion.py` | 单元测试 | NotionKnowledge (读/创建含page parent/更新/搜索/列数据库/ID验证/Block→Markdown含to_do/API key warning) 测试 |
 | `test_knowledge_web_archive.py` | 单元测试 | WebArchive (保存/去重/搜索/列出/max_pages/URL验证/frontmatter防注入) 测试 |
+| `test_cron_store.py` | 单元测试 | CronTaskStore CRUD、原子写入、并发安全、add_if_name_unique 测试 |
+| `test_cron_scheduler.py` | 单元测试 | CronScheduler (到期判定/触发回调/disabled跳过/并发安全) 测试 |
+| `test_tools_cron.py` | 单元测试 | Cron 工具 (add/list/remove/toggle/重名拒绝/notify字段/风险等级) 测试 |
+| `test_cron_context.py` | 单元测试 | CronExecutionConstraints 解析、默认值、工具阻止逻辑测试 |
+| `test_cron_concurrency.py` | 单元测试 | 消息路由并发控制 (bounded semaphore/信号量释放/active_tasks 清理) 测试 |
+| `test_cron_agent_integration.py` | 集成测试 | Cron 约束在 agent loop 中的集成 (工具阻止/max_iterations/timeout) 测试 |
+| `test_vector_integration.py` | 集成测试 | VectorStore (LanceDB 向量搜索) 集成测试 |
+| `test_health_check.py` | 单元测试 | HealthMonitor + HealthCheckServer 健康检查测试 |
+| `test_wechat_channel.py` | 单元测试 | 微信渠道 (消息收发/白名单) 测试 |
+| `test_skill_registry.py` | 单元测试 | SkillRegistry (多目录扫描/原子重载/保护名称) 测试 |
+| `test_skill_installer.py` | 单元测试 | SkillInstaller (本地/URL/GitHub/索引安装) 测试 |
+| `test_skill_index_client.py` | 单元测试 | IndexClient (索引拉取/缓存/搜索) 测试 |
+| `test_skill_integrity.py` | 单元测试 | 技能完整性 (SHA256/SSRF/格式/大小) 测试 |
+| `test_skill_tools.py` | 单元测试 | 技能管理工具 (search/install/remove/list/show) 测试 |
+| `test_skill_cli.py` | 单元测试 | 技能 CLI 子命令测试 |
+| `test_skills_config.py` | 单元测试 | SkillsConfig Pydantic 配置测试 |

@@ -22,6 +22,7 @@ class AgentConfig(BaseModel):
     fallback_model: str = Field(default="gpt-4o", alias="fallbackModel")
     max_iterations: int = Field(default=40, alias="maxIterations")
     subagent_max_iterations: int = Field(default=15, alias="subagentMaxIterations")
+    max_concurrent_tasks: int = Field(default=3, alias="maxConcurrentTasks", ge=1)
     model_routing: ModelRoutingConfig = Field(
         default_factory=ModelRoutingConfig, alias="modelRouting"
     )

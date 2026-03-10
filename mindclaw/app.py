@@ -4,7 +4,7 @@
 #        tools/*, gateway/*, plugins/loader.py, plugins/hooks.py,
 #        skills/installer.py, skills/index_client.py
 # output: 导出 MindClawApp
-# pos: 顶层编排器，统一管理所有组件的生命周期和消息路由
+# pos: 顶层编排器，统一管理所有组件的生命周期和消息路由 (含 bounded semaphore 并发控制)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
@@ -26,6 +26,7 @@ from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.agent_loop import AgentLoop
 from mindclaw.orchestrator.context import ContextBuilder
 from mindclaw.orchestrator.cron_scheduler import CronScheduler
+from mindclaw.orchestrator.cron_store import CronTaskStore
 from mindclaw.orchestrator.subagent import SubAgentManager
 from mindclaw.plugins.hooks import HookRegistry
 from mindclaw.plugins.loader import PluginLoader
@@ -33,7 +34,7 @@ from mindclaw.security.approval import ApprovalManager
 from mindclaw.skills.index_client import IndexClient
 from mindclaw.skills.installer import SkillInstaller
 from mindclaw.skills.registry import SkillRegistry
-from mindclaw.tools.cron import CronAddTool, CronListTool, CronRemoveTool
+from mindclaw.tools.cron import CronAddTool, CronListTool, CronRemoveTool, CronToggleTool
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from mindclaw.tools.memory import MemorySaveTool, MemorySearchTool
 from mindclaw.tools.message_user import MessageUserTool
@@ -102,9 +103,10 @@ class MindClawApp:
             vector_store=self.vector_store,
         )
 
-        # Cron scheduler
+        # Cron store + scheduler
+        self.cron_store = CronTaskStore(data_dir=data_dir)
         self.cron_scheduler = CronScheduler(
-            data_dir=data_dir,
+            store=self.cron_store,
             on_trigger=self._on_cron_trigger,
         )
 
@@ -132,17 +134,37 @@ class MindClawApp:
         )
 
         self._gateway_auth = None
-        self._agent_task: asyncio.Task | None = None
+        self._task_semaphore = asyncio.Semaphore(config.agent.max_concurrent_tasks)
+        self._active_tasks: set[asyncio.Task] = set()
 
-    async def _on_cron_trigger(self, name: str, action: str) -> None:
+    async def _on_cron_trigger(self, task_id: str, task: dict) -> None:
         """Handle cron task triggers by sending them as inbound messages."""
+        name = task.get("name", task_id)
+        action = task.get("action", "")
+        notify_channel = task.get("notify_channel", "")
+        notify_chat_id = task.get("notify_chat_id", "")
+
+        metadata: dict = {
+            "cron_task_id": task_id,
+            "cron_task_name": name,
+        }
+        if notify_channel:
+            metadata["notify_channel"] = notify_channel
+        if notify_chat_id:
+            metadata["notify_chat_id"] = notify_chat_id
+        # Pass cron constraints through metadata
+        for key in ("max_iterations", "timeout"):
+            if key in task:
+                metadata[key] = task[key]
+
         await self.bus.put_inbound(
             InboundMessage(
                 channel="system",
-                chat_id="cron",
+                chat_id=f"cron:{name}",
                 user_id="cron",
                 username="CronScheduler",
                 text=f"[Scheduled Task: {name}] {action}",
+                metadata=metadata,
             )
         )
 
@@ -183,10 +205,10 @@ class MindClawApp:
         ))
 
         # Cron tools
-        data_dir = Path(self.config.knowledge.data_dir)
-        self.tool_registry.register(CronAddTool(data_dir=data_dir))
-        self.tool_registry.register(CronListTool(data_dir=data_dir))
-        self.tool_registry.register(CronRemoveTool(data_dir=data_dir))
+        self.tool_registry.register(CronAddTool(store=self.cron_store))
+        self.tool_registry.register(CronListTool(store=self.cron_store))
+        self.tool_registry.register(CronRemoveTool(store=self.cron_store))
+        self.tool_registry.register(CronToggleTool(store=self.cron_store))
 
         # Skill tools
         from mindclaw.tools.skill_tools import (
@@ -433,6 +455,13 @@ class MindClawApp:
         if exc is not None:
             logger.error(f"Agent task failed with unhandled exception: {exc}")
 
+    async def _process_message_guarded(self, msg: InboundMessage) -> None:
+        """Process message with semaphore release guarantee."""
+        try:
+            await self._process_message(msg)
+        finally:
+            self._task_semaphore.release()
+
     async def _message_router(self) -> None:
         while True:
             msg = await self.bus.get_inbound()
@@ -454,15 +483,16 @@ class MindClawApp:
                 logger.debug(f"Ignoring message during pending approval: {msg.text[:50]}")
                 continue
 
-            # 4. Wait for previous agent task
-            if self._agent_task is not None and not self._agent_task.done():
-                try:
-                    await self._agent_task
-                except Exception:
-                    pass
-
-            self._agent_task = asyncio.create_task(self._process_message(msg))
-            self._agent_task.add_done_callback(self._task_done_callback)
+            # 4. Acquire semaphore and dispatch task concurrently
+            await self._task_semaphore.acquire()
+            try:
+                task = asyncio.create_task(self._process_message_guarded(msg))
+            except BaseException:
+                self._task_semaphore.release()
+                raise
+            self._active_tasks.add(task)
+            task.add_done_callback(self._active_tasks.discard)
+            task.add_done_callback(self._task_done_callback)
 
     async def _outbound_router(self) -> None:
         while True:
@@ -515,10 +545,11 @@ class MindClawApp:
                     await t
                 except asyncio.CancelledError:
                     pass
-            if self._agent_task and not self._agent_task.done():
-                self._agent_task.cancel()
+            for active in list(self._active_tasks):
+                active.cancel()
+            for active in list(self._active_tasks):
                 try:
-                    await self._agent_task
+                    await active
                 except asyncio.CancelledError:
                     pass
             # Stop background services
