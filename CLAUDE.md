@@ -65,7 +65,7 @@ mindclaw/
 
 ## Development Phases
 
-当前进度：Phase 10 核心完成 — LLM 自动降级、技能系统、定时任务、健康检查、微信渠道、Daemon 部署已实现，向量搜索 (LanceDB) 待做
+当前进度：Phase 10 全部完成 — LLM 自动降级、技能系统、定时任务、健康检查、微信渠道、Daemon 部署、向量搜索 (LanceDB) 均已实现
 
 | Phase | 内容 | 里程碑 |
 |-------|------|--------|

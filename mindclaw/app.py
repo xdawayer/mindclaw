@@ -1,7 +1,7 @@
 # input: config/schema.py, bus/queue.py, channels/manager.py, orchestrator/agent_loop.py,
 #        orchestrator/subagent.py, security/approval.py, knowledge/session.py,
-#        knowledge/memory.py, orchestrator/context.py, llm/router.py, tools/*,
-#        gateway/*, plugins/loader.py, plugins/hooks.py
+#        knowledge/memory.py, knowledge/vector.py, orchestrator/context.py, llm/router.py,
+#        tools/*, gateway/*, plugins/loader.py, plugins/hooks.py
 # output: 导出 MindClawApp
 # pos: 顶层编排器，统一管理所有组件的生命周期和消息路由
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -20,6 +20,7 @@ from mindclaw.config.schema import MindClawConfig
 from mindclaw.health.check import HealthCheckServer, HealthMonitor
 from mindclaw.knowledge.memory import MemoryManager
 from mindclaw.knowledge.session import SessionStore
+from mindclaw.knowledge.vector import VectorStore
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.agent_loop import AgentLoop
 from mindclaw.orchestrator.context import ContextBuilder
@@ -31,6 +32,7 @@ from mindclaw.security.approval import ApprovalManager
 from mindclaw.skills.registry import SkillRegistry
 from mindclaw.tools.cron import CronAddTool, CronListTool, CronRemoveTool
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from mindclaw.tools.memory import MemorySaveTool, MemorySearchTool
 from mindclaw.tools.message_user import MessageUserTool
 from mindclaw.tools.registry import ToolRegistry
 from mindclaw.tools.shell import ExecTool
@@ -52,10 +54,21 @@ class MindClawApp:
 
         data_dir = Path(config.knowledge.data_dir)
         self.session_store = SessionStore(data_dir=data_dir)
+
+        # Vector store (optional)
+        self.vector_store: VectorStore | None = None
+        if config.knowledge.vector_db.enabled:
+            self.vector_store = VectorStore(
+                data_dir=data_dir,
+                config=config.knowledge.vector_db,
+                router=self.router,
+            )
+
         self.memory_manager = MemoryManager(
             data_dir=data_dir,
             router=self.router,
             config=config,
+            vector_store=self.vector_store,
         )
 
         # Skills
@@ -65,6 +78,7 @@ class MindClawApp:
         self.context_builder = ContextBuilder(
             memory_manager=self.memory_manager,
             skill_registry=self.skill_registry,
+            vector_store=self.vector_store,
         )
 
         # Cron scheduler
@@ -136,6 +150,16 @@ class MindClawApp:
             ),
         ))
         self.tool_registry.register(SpawnTaskTool(manager=self.subagent_manager))
+
+        # Memory tools
+        self.tool_registry.register(MemorySaveTool(
+            memory_manager=self.memory_manager,
+            vector_store=self.vector_store,
+        ))
+        self.tool_registry.register(MemorySearchTool(
+            memory_manager=self.memory_manager,
+            vector_store=self.vector_store,
+        ))
 
         # Cron tools
         data_dir = Path(self.config.knowledge.data_dir)

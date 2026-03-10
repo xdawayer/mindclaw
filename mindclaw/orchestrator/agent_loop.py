@@ -66,8 +66,10 @@ class AgentLoop:
             history = history[cutoff:]
         return history
 
-    def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
-        system_prompt = self.context_builder.build_system_prompt()
+    async def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
+        system_prompt = await self.context_builder.abuild_system_prompt(
+            user_message=user_text
+        )
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(history)
         messages.append({"role": "user", "content": user_text})
@@ -129,7 +131,7 @@ class AgentLoop:
         initial_history_len = len(history)
         max_iterations = max(1, self.config.agent.max_iterations)
 
-        messages = self._build_messages(history, inbound.text)
+        messages = await self._build_messages(history, inbound.text)
         tools = self.tool_registry.to_openai_tools() or None
 
         logger.info(f"Agent processing: session={session_key}, user={inbound.username}")

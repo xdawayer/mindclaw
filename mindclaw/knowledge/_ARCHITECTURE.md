@@ -11,3 +11,4 @@
 | `obsidian.py` | 知识源 | ObsidianKnowledge — Obsidian vault 读写/搜索/标签(含YAML list)/链接 |
 | `notion.py` | 知识源 | NotionKnowledge — Notion API 读页面/创建(database+page)/更新/搜索/列数据库，Block→Markdown，ID 验证 |
 | `web_archive.py` | 知识源 | WebArchive — 网页收藏 (HTML→Markdown 保存/全文搜索/列出)，URL 验证 + frontmatter 注入防护 |
+| `vector.py` | 核心模块 | VectorStore — LanceDB 本地向量数据库 + LiteLLM embedding，支持分块索引/语义搜索/按来源删除，disabled 时 Null Object |

@@ -2,7 +2,7 @@
 # output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ChannelConfig, ProviderSettings,
 #         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig,
 #         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig
-# pos: 配置层核心，定义所有配置的 Pydantic 模型
+# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from pydantic import BaseModel, Field
@@ -94,6 +94,12 @@ class VectorDbConfig(BaseModel):
     enabled: bool = False
     provider: str = "lancedb"
     embedding_model: str = Field(default="text-embedding-3-small", alias="embeddingModel")
+    db_path: str = Field(default="vector_db", alias="dbPath")
+    table_name: str = Field(default="documents", alias="tableName")
+    embedding_dimensions: int = Field(default=1536, alias="embeddingDimensions")
+    chunk_size: int = Field(default=500, alias="chunkSize")
+    chunk_overlap: int = Field(default=50, alias="chunkOverlap")
+    top_k: int = Field(default=5, alias="topK")
 
     model_config = {"populate_by_name": True}
 
