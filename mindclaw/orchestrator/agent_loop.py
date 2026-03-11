@@ -2,11 +2,12 @@
 #        tools/registry.py, security/approval.py, knowledge/session.py,
 #        knowledge/memory.py, orchestrator/context.py, orchestrator/cron_context.py,
 #        plugins/hooks.py
-# output: 导出 AgentLoop
+# output: 导出 AgentLoop, current_channel_var, current_chat_id_var
 # pos: 编排层核心，ReAct 推理循环 (含工具调用 + cron 执行约束 + before_tool/after_tool hooks)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
+import contextvars
 import json
 from pathlib import Path
 
@@ -29,6 +30,17 @@ from mindclaw.tools.base import RiskLevel
 from mindclaw.tools.registry import ToolRegistry
 
 MAX_HISTORY_MESSAGES = 100
+
+# Per-task context variables for the current channel/chat_id.
+# Each asyncio task gets its own copy, eliminating the shared-state race condition
+# that occurred when _current_channel/_current_chat_id were instance variables.
+# Tools (e.g. MessageUserTool) read these to find the current routing destination.
+current_channel_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "current_channel", default=""
+)
+current_chat_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "current_chat_id", default=""
+)
 
 
 class AgentLoop:
@@ -59,9 +71,6 @@ class AgentLoop:
         self.context_builder = context_builder or ContextBuilder(
             memory_manager=self.memory_manager,
         )
-
-        self._current_channel: str = ""
-        self._current_chat_id: str = ""
 
     def _get_history(self, session_key: str) -> list[dict]:
         history, _ = self.session_store.load(session_key)
@@ -120,12 +129,15 @@ class AgentLoop:
         tools: list[dict] | None,
         max_iterations: int,
         routed_model: str,
+        channel: str,
+        chat_id: str,
         cron_constraints: CronExecutionConstraints | None = None,
         timeout_seconds: float | None = None,
     ) -> str:
         """Core ReAct loop, optionally wrapped with asyncio timeout."""
         coro = self._agent_loop_inner(
-            messages, tools, max_iterations, routed_model, cron_constraints,
+            messages, tools, max_iterations, routed_model, channel, chat_id,
+            cron_constraints,
         )
         if timeout_seconds is not None:
             return await asyncio.wait_for(coro, timeout=timeout_seconds)
@@ -137,6 +149,8 @@ class AgentLoop:
         tools: list[dict] | None,
         max_iterations: int,
         routed_model: str,
+        channel: str,
+        chat_id: str,
         cron_constraints: CronExecutionConstraints | None = None,
     ) -> str:
         """Inner ReAct loop (tool calls + LLM turns)."""
@@ -151,6 +165,9 @@ class AgentLoop:
                 return result.content or "(no response)"
 
             assistant_msg = {"role": "assistant", "content": result.content, "tool_calls": []}
+            # Preserve reasoning_content for DeepSeek Reasoner compatibility
+            if result.reasoning_content is not None:
+                assistant_msg["reasoning_content"] = result.reasoning_content
             for tc in result.tool_calls:
                 assistant_msg["tool_calls"].append({
                     "id": tc.id,
@@ -162,7 +179,8 @@ class AgentLoop:
             for tc in result.tool_calls:
                 logger.info(f"Tool call: {tc.function.name}")
                 tool_result = await self._execute_tool(
-                    tc.function.name, tc.function.arguments, cron_constraints,
+                    tc.function.name, tc.function.arguments, channel, chat_id,
+                    cron_constraints,
                 )
                 messages.append({
                     "role": "tool",
@@ -179,6 +197,8 @@ class AgentLoop:
         self,
         name: str,
         arguments: str,
+        channel: str,
+        chat_id: str,
         cron_constraints: CronExecutionConstraints | None = None,
     ) -> str:
         tool = self.tool_registry.get(name)
@@ -199,8 +219,8 @@ class AgentLoop:
                 approved = await self.approval_manager.request_approval(
                     tool_name=name,
                     arguments=arguments,
-                    channel=self._current_channel,
-                    chat_id=self._current_chat_id,
+                    channel=channel,
+                    chat_id=chat_id,
                 )
                 if not approved:
                     logger.warning(f"DANGEROUS tool '{name}' was not approved")
@@ -250,12 +270,14 @@ class AgentLoop:
             notify_channel = inbound.metadata.get("notify_channel", "")
             notify_chat_id = inbound.metadata.get("notify_chat_id", "")
 
-        if notify_channel:
-            self._current_channel = notify_channel
-            self._current_chat_id = notify_chat_id
-        else:
-            self._current_channel = inbound.channel
-            self._current_chat_id = inbound.chat_id
+        # Determine channel/chat_id for this invocation (local variables, never shared)
+        channel = notify_channel if notify_channel else inbound.channel
+        chat_id = notify_chat_id if notify_channel else inbound.chat_id
+
+        # Expose via ContextVar so tools (e.g. MessageUserTool) can read it safely.
+        # ContextVar is per-task: concurrent handle_message calls do not interfere.
+        current_channel_var.set(channel)
+        current_chat_id_var.set(chat_id)
 
         # Parse cron execution constraints (returns None for non-cron messages)
         cron_constraints = parse_cron_constraints_if_cron(
@@ -293,6 +315,8 @@ class AgentLoop:
                 tools=tools,
                 max_iterations=max_iterations,
                 routed_model=routed_model,
+                channel=channel,
+                chat_id=chat_id,
                 cron_constraints=cron_constraints,
                 timeout_seconds=(
                     cron_constraints.timeout_seconds if cron_constraints else None

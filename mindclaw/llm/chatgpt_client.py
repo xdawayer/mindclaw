@@ -250,9 +250,11 @@ class ChatGPTBackendClient:
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
+            "OpenAI-Beta": "responses=v1",
+            "originator": "mindclaw",
         }
         if account_id:
-            headers["ChatGPT-Account-ID"] = account_id
+            headers["chatgpt-account-id"] = account_id
 
         logger.debug(
             f"ChatGPT backend call: model={model}, "

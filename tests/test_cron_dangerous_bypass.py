@@ -94,7 +94,7 @@ async def test_cron_skips_approval_for_dangerous_tool(agent_loop_allow, approval
     cron_constraints = CronExecutionConstraints()
 
     result = await agent_loop_allow._execute_tool(
-        "fake_dangerous", "{}", cron_constraints=cron_constraints
+        "fake_dangerous", "{}", "", "", cron_constraints=cron_constraints
     )
 
     assert result == "dangerous result"
@@ -107,7 +107,7 @@ async def test_cron_still_blocks_if_allow_dangerous_disabled(agent_loop_deny):
     cron_constraints = CronExecutionConstraints()
 
     result = await agent_loop_deny._execute_tool(
-        "fake_dangerous", "{}", cron_constraints=cron_constraints
+        "fake_dangerous", "{}", "", "", cron_constraints=cron_constraints
     )
 
     assert "requires" in result.lower() or "allowdangeroustools" in result.lower()
@@ -122,7 +122,7 @@ async def test_cron_still_blocks_tools_in_blocked_list(agent_loop_allow):
     )
 
     result = await agent_loop_allow._execute_tool(
-        "fake_dangerous", "{}", cron_constraints=cron_constraints
+        "fake_dangerous", "{}", "", "", cron_constraints=cron_constraints
     )
 
     assert "not allowed" in result.lower() or "blocked" in result.lower()
@@ -133,7 +133,7 @@ async def test_cron_still_blocks_tools_in_blocked_list(agent_loop_allow):
 async def test_normal_mode_still_requires_approval(agent_loop_allow, approval_mock):
     """Without cron_constraints (normal mode), DANGEROUS tool still calls approval_manager."""
     result = await agent_loop_allow._execute_tool(
-        "fake_dangerous", "{}", cron_constraints=None
+        "fake_dangerous", "{}", "cli", "local", cron_constraints=None
     )
 
     assert result == "dangerous result"
@@ -146,7 +146,7 @@ async def test_cron_safe_tool_unaffected(agent_loop_allow, approval_mock):
     cron_constraints = CronExecutionConstraints()
 
     result = await agent_loop_allow._execute_tool(
-        "fake_safe", "{}", cron_constraints=cron_constraints
+        "fake_safe", "{}", "", "", cron_constraints=cron_constraints
     )
 
     assert result == "safe result"

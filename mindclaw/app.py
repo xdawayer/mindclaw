@@ -5,7 +5,7 @@
 #        skills/installer.py, skills/index_client.py, tools/api_call.py,
 #        tools/web_snapshot.py, tools/twitter_read.py, tools/dashboard_export.py
 # output: 导出 MindClawApp
-# pos: 顶层编排器，统一管理所有组件的生命周期和消息路由 (含 bounded semaphore 并发控制)
+# pos: 顶层编排器，管理组件生命周期和消息路由 (semaphore 并发 + per-session lock)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
@@ -154,6 +154,7 @@ class MindClawApp:
         self._gateway_auth = None
         self._task_semaphore = asyncio.Semaphore(config.agent.max_concurrent_tasks)
         self._active_tasks: set[asyncio.Task] = set()
+        self._session_locks: dict[str, asyncio.Lock] = {}
 
     async def _on_cron_trigger(self, task_id: str, task: dict) -> None:
         """Handle cron task triggers by sending them as inbound messages."""
@@ -209,13 +210,7 @@ class MindClawApp:
                 auth_profiles=self.config.tools.api_call_auth_profiles,
             ))
 
-        self.tool_registry.register(MessageUserTool(
-            bus=self.bus,
-            context_provider=lambda: (
-                self.agent_loop._current_channel,
-                self.agent_loop._current_chat_id,
-            ),
-        ))
+        self.tool_registry.register(MessageUserTool(bus=self.bus))
         self.tool_registry.register(SpawnTaskTool(manager=self.subagent_manager))
 
         # Memory tools
@@ -500,9 +495,19 @@ class MindClawApp:
             logger.error(f"Agent task failed with unhandled exception: {exc}")
 
     async def _process_message_guarded(self, msg: InboundMessage) -> None:
-        """Process message with semaphore release guarantee."""
+        """Process message with semaphore release guarantee and per-session serialization.
+
+        The global semaphore caps total concurrent tasks (default 3).
+        Within a session the per-session lock serializes messages so that the
+        second message only starts after the first has finished, preventing
+        concurrent reads of the same history state.
+        """
         try:
-            await self._process_message(msg)
+            session_key = msg.session_key
+            if session_key not in self._session_locks:
+                self._session_locks[session_key] = asyncio.Lock()
+            async with self._session_locks[session_key]:
+                await self._process_message(msg)
         finally:
             self._task_semaphore.release()
 
@@ -516,14 +521,16 @@ class MindClawApp:
                 continue
 
             # 2. Approval reply interception (must match channel + chat_id)
-            if self.approval_manager.has_pending() and self.approval_manager.is_approval_reply(
+            if self.approval_manager.has_pending(
+                session_key=msg.session_key
+            ) and self.approval_manager.is_approval_reply(
                 msg.text, channel=msg.channel, chat_id=msg.chat_id
             ):
                 self.approval_manager.resolve(msg.text)
                 continue
 
-            # 3. Drop non-approval messages during pending approval
-            if self.approval_manager.has_pending():
+            # 3. Drop non-approval messages only for the same session that has a pending approval
+            if self.approval_manager.has_pending(session_key=msg.session_key):
                 logger.debug(f"Ignoring message during pending approval: {msg.text[:50]}")
                 continue
 

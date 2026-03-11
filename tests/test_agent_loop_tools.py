@@ -132,7 +132,7 @@ async def test_agent_loop_blocks_dangerous_tools():
 
     agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
 
-    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    result = await agent._execute_tool("exec", '{"command": "ls"}', "cli", "local")
     assert "requires" in result.lower() or "error" in result.lower()
 
 
@@ -149,7 +149,7 @@ async def test_agent_loop_allows_dangerous_when_enabled():
 
     agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
 
-    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    result = await agent._execute_tool("exec", '{"command": "ls"}', "cli", "local")
     assert result == "executed"
 
 
@@ -175,9 +175,6 @@ async def test_dangerous_tool_triggers_approval_and_approved():
         tool_registry=registry,
         approval_manager=approval_manager,
     )
-    # Set context (normally set by handle_message)
-    agent._current_channel = "cli"
-    agent._current_chat_id = "local"
 
     async def grant():
         await asyncio.sleep(0.05)
@@ -185,7 +182,7 @@ async def test_dangerous_tool_triggers_approval_and_approved():
         approval_manager.resolve("yes")
 
     asyncio.create_task(grant())
-    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    result = await agent._execute_tool("exec", '{"command": "ls"}', "cli", "local")
     assert result == "executed"
 
 
@@ -211,8 +208,6 @@ async def test_dangerous_tool_triggers_approval_and_rejected():
         tool_registry=registry,
         approval_manager=approval_manager,
     )
-    agent._current_channel = "cli"
-    agent._current_chat_id = "local"
 
     async def reject():
         await asyncio.sleep(0.05)
@@ -220,7 +215,7 @@ async def test_dangerous_tool_triggers_approval_and_rejected():
         approval_manager.resolve("no")
 
     asyncio.create_task(reject())
-    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    result = await agent._execute_tool("exec", '{"command": "ls"}', "cli", "local")
     assert "not approved" in result.lower() or "rejected" in result.lower()
 
 
@@ -237,7 +232,7 @@ async def test_dangerous_tool_no_approval_manager_still_works():
 
     # No approval_manager passed
     agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
-    result = await agent._execute_tool("exec", '{"command": "ls"}')
+    result = await agent._execute_tool("exec", '{"command": "ls"}', "cli", "local")
     assert result == "executed"
 
 
@@ -288,7 +283,7 @@ async def test_tool_with_custom_max_chars_overrides_config():
     registry.register(LongOutputTool())
 
     agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
-    result = await agent._execute_tool("long_output", "{}")
+    result = await agent._execute_tool("long_output", "{}", "cli", "local")
 
     # Result must be capped at 20 chars (plus truncation suffix)
     assert "A" * 20 in result
@@ -320,7 +315,7 @@ async def test_tool_without_max_chars_uses_config_default():
     registry.register(DefaultTool())
 
     agent = AgentLoop(config=config, bus=bus, router=router, tool_registry=registry)
-    result = await agent._execute_tool("default_output", "{}")
+    result = await agent._execute_tool("default_output", "{}", "cli", "local")
 
     # Result must be capped at config default (500 chars)
     assert "B" * 500 in result

@@ -53,6 +53,7 @@ async def test_concurrent_messages_not_blocked():
     app.approval_manager.has_pending.return_value = False
     app._task_semaphore = asyncio.Semaphore(3)
     app._active_tasks = set()
+    app._session_locks = {}
     app.hook_registry = AsyncMock()
 
     # Track concurrent execution
@@ -103,6 +104,7 @@ async def test_semaphore_limits_concurrency():
     app.approval_manager.has_pending.return_value = False
     app._task_semaphore = asyncio.Semaphore(2)
     app._active_tasks = set()
+    app._session_locks = {}
     app.hook_registry = AsyncMock()
 
     concurrent_count = 0
@@ -183,6 +185,7 @@ async def test_process_message_guarded_releases_semaphore():
 
     sem = asyncio.Semaphore(2)
     app._task_semaphore = sem
+    app._session_locks = {}
     app.hook_registry = AsyncMock()
 
     async def failing_process(msg):

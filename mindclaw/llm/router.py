@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import litellm
 from litellm import acompletion
-from litellm.exceptions import AuthenticationError, RateLimitError
+from litellm.exceptions import AuthenticationError, BadRequestError, RateLimitError
 from loguru import logger
 
 from mindclaw.config.schema import MindClawConfig
@@ -34,7 +34,35 @@ _MODEL_PROVIDER_MAP = {
 
 _FALLBACK_ERRORS = (
     RateLimitError, asyncio.TimeoutError, AuthenticationError, RuntimeError,
+    BadRequestError,
 )
+
+_DEEPSEEK_REASONER_MODELS = frozenset({"deepseek/deepseek-reasoner", "deepseek-reasoner"})
+
+
+def _sanitize_messages_for_model(model: str, messages: list[dict]) -> list[dict]:
+    """Clean message history for cross-model compatibility.
+
+    DeepSeek Reasoner requires ``reasoning_content`` on assistant messages;
+    other models choke on that field.  This function adds or strips the field
+    as needed so the history can be sent to *any* provider.
+    """
+    is_reasoner = model in _DEEPSEEK_REASONER_MODELS
+    cleaned: list[dict] = []
+    for msg in messages:
+        if msg.get("role") != "assistant":
+            cleaned.append(msg)
+            continue
+        copy = dict(msg)
+        if is_reasoner:
+            # Reasoner requires the field on every assistant message
+            if "reasoning_content" not in copy or copy["reasoning_content"] is None:
+                copy["reasoning_content"] = ""
+        else:
+            # Other models reject the unknown field
+            copy.pop("reasoning_content", None)
+        cleaned.append(copy)
+    return cleaned
 
 
 @dataclass
@@ -42,6 +70,7 @@ class ChatResult:
     content: str | None
     tool_calls: list[Any] | None
     used_fallback: bool = field(default=False)
+    reasoning_content: str | None = field(default=None)
 
 
 class LLMRouter:
@@ -103,10 +132,11 @@ class LLMRouter:
             raise RuntimeError("OAuth manager required for ChatGPT backend")
         access_token = await self._oauth_manager.get_access_token("openai")
         client = self._get_chatgpt_client()
+        cleaned = _sanitize_messages_for_model(model, messages)
         content, tool_calls = await client.chat(
             access_token=access_token,
             model=model,
-            messages=messages,
+            messages=cleaned,
             tools=tools,
         )
         return ChatResult(
@@ -121,7 +151,8 @@ class LLMRouter:
         messages: list[dict],
         tools: list[dict] | None,
     ) -> dict[str, Any]:
-        kwargs: dict[str, Any] = {"model": model, "messages": messages}
+        cleaned = _sanitize_messages_for_model(model, messages)
+        kwargs: dict[str, Any] = {"model": model, "messages": cleaned}
         if tools:
             kwargs["tools"] = tools
 
@@ -177,6 +208,7 @@ class LLMRouter:
                 content=message.content,
                 tool_calls=message.tool_calls,
                 used_fallback=False,
+                reasoning_content=getattr(message, "reasoning_content", None),
             )
         except _FALLBACK_ERRORS as e:
             if not self._can_fallback(resolved_model):
@@ -196,4 +228,5 @@ class LLMRouter:
                 content=message.content,
                 tool_calls=message.tool_calls,
                 used_fallback=True,
+                reasoning_content=getattr(message, "reasoning_content", None),
             )

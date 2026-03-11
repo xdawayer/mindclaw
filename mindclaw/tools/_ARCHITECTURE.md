@@ -11,7 +11,7 @@
 | `file_ops.py` | 内置工具 | 文件操作工具 (ReadFile/WriteFile/EditFile/ListDir)，原子写入，路径沙箱委托 security/sandbox |
 | `shell.py` | 内置工具 | Shell 执行工具 (ExecTool)，超时保护和进程组终止，命令黑名单委托 security/sandbox |
 | `web.py` | 内置工具 | WebFetchTool (流式网页抓取 + SSRF 防护, max_result_chars=5000) + WebSearchTool (Tavily 搜索, max_result_chars=3000) |
-| `message_user.py` | 内置工具 | MessageUserTool - 主动发消息给用户 (MODERATE)，channel/chat_id 由 AgentLoop 动态更新 |
+| `message_user.py` | 内置工具 | MessageUserTool - 主动发消息给用户 (MODERATE)，channel/chat_id 优先读 context_provider (兼容旧接口)，其次读 AgentLoop ContextVar (并发安全) |
 | `spawn_task.py` | 内置工具 | SpawnTaskTool - 派发子 Agent 任务 (DANGEROUS)，通过 SubAgentManager 管理 |
 | `cron.py` | 内置工具 | CronAddTool / CronListTool / CronRemoveTool / CronToggleTool / CronHistoryTool - 定时任务 CRUD + 执行历史查询 |
 | `memory.py` | 内置工具 | MemorySaveTool (MODERATE) + MemorySearchTool (SAFE) — 长期记忆保存/语义+关键词搜索 |

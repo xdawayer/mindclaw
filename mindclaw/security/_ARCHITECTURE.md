@@ -6,5 +6,5 @@
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
 | `sandbox.py` | 核心 | 命令黑名单 (is_command_denied) + 路径沙箱验证 (validate_path) |
-| `approval.py` | 核心 | 审批工作流 (`ApprovalManager`)，DANGEROUS 工具执行前的用户确认机制，按 channel+chat_id 精确匹配审批回复 |
+| `approval.py` | 核心 | 审批工作流 (`ApprovalManager`)，DANGEROUS 工具执行前的用户确认机制；`has_pending(session_key=)` 支持 per-session 查询，阻塞仅限发起会话，其他会话不受影响 |
 | `crypto.py` | 核心 | 加密存储 (`SecretStore`)，Fernet 对称加密保存 API Key 等敏感信息，0600 权限 |

@@ -109,7 +109,7 @@ async def test_cron_blocks_exec_tool_returns_error():
     from mindclaw.orchestrator.cron_context import CronExecutionConstraints
 
     constraints = CronExecutionConstraints()
-    result = await agent._execute_tool("exec", '{"cmd": "ls"}', constraints)
+    result = await agent._execute_tool("exec", '{"cmd": "ls"}', "", "", constraints)
 
     assert "not allowed" in result.lower()
     assert "cron" in result.lower()
@@ -128,7 +128,7 @@ async def test_cron_allows_safe_tools():
     from mindclaw.orchestrator.cron_context import CronExecutionConstraints
 
     constraints = CronExecutionConstraints()
-    result = await agent._execute_tool("dummy", '{"x": "hello"}', constraints)
+    result = await agent._execute_tool("dummy", '{"x": "hello"}', "", "", constraints)
 
     assert result == "dummy result"
 
@@ -220,5 +220,5 @@ async def test_non_cron_does_not_block_tools():
     agent.tool_registry.register(ExecTool())
 
     # No cron constraints -- exec should work
-    result = await agent._execute_tool("exec", '{"cmd": "ls"}')
+    result = await agent._execute_tool("exec", '{"cmd": "ls"}', "cli", "local")
     assert result == "executed"

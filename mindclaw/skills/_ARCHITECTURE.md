@@ -9,7 +9,7 @@
 | `installer.py` | 核心 | 技能安装/卸载/更新，支持本地/URL/GitHub/索引四种源 |
 | `index_client.py` | 核心 | 集中索引拉取、本地缓存(TTL 24h)、技能搜索 |
 | `integrity.py` | 安全 | SHA256 校验、SSRF 过滤、格式验证、大小限制 |
-| `summarize.md` | 内置技能 | 文章总结技能 (on_demand) |
+| `summarize.md` | 内置技能 | URL/文件/YouTube 总结提取 (summarize CLI) (on_demand) |
 | `translate.md` | 内置技能 | 翻译技能 (on_demand) |
 | `hot-news.md` | 内置技能 | 热点新闻聚合 - 多类别搜索+摘要日报 (on_demand) |
 | `competitor-monitor.md` | 内置技能 | 竞品监控 - 网页快照对比+语义差异分析 (on_demand) |

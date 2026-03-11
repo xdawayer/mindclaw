@@ -11,7 +11,7 @@ from mindclaw.bus.events import InboundMessage
 from mindclaw.bus.queue import MessageBus
 from mindclaw.config.schema import MindClawConfig
 from mindclaw.llm.router import ChatResult, LLMRouter
-from mindclaw.orchestrator.agent_loop import AgentLoop
+from mindclaw.orchestrator.agent_loop import AgentLoop, current_channel_var, current_chat_id_var
 from mindclaw.orchestrator.subagent import SubAgentManager
 from mindclaw.tools.message_user import MessageUserTool
 from mindclaw.tools.registry import ToolRegistry
@@ -33,10 +33,7 @@ def _make_agent_with_tools(bus: MessageBus, config: MindClawConfig | None = None
         tool_registry=registry,
     )
 
-    msg_tool = MessageUserTool(
-        bus=bus,
-        context_provider=lambda: (agent._current_channel, agent._current_chat_id),
-    )
+    msg_tool = MessageUserTool(bus=bus)
     spawn_tool = SpawnTaskTool(manager=manager)
     registry.register(msg_tool)
     registry.register(spawn_tool)
@@ -46,7 +43,7 @@ def _make_agent_with_tools(bus: MessageBus, config: MindClawConfig | None = None
 
 @pytest.mark.asyncio
 async def test_message_user_context_from_agent_loop():
-    """MessageUserTool should read context from AgentLoop via provider."""
+    """MessageUserTool should read context set by AgentLoop via ContextVar."""
     bus = MessageBus()
     config = MindClawConfig()
     router = LLMRouter(config)
@@ -56,10 +53,7 @@ async def test_message_user_context_from_agent_loop():
         config=config, bus=bus, router=router, tool_registry=registry,
     )
 
-    msg_tool = MessageUserTool(
-        bus=bus,
-        context_provider=lambda: (agent._current_channel, agent._current_chat_id),
-    )
+    msg_tool = MessageUserTool(bus=bus)
     registry.register(msg_tool)
 
     inbound = InboundMessage(
@@ -71,10 +65,9 @@ async def test_message_user_context_from_agent_loop():
     with patch.object(router, "chat", return_value=mock_result):
         await agent.handle_message(inbound)
 
-    # Verify the provider reads from agent's current context
-    channel, chat_id = msg_tool._context_provider()
-    assert channel == "telegram"
-    assert chat_id == "12345"
+    # After handle_message, the ContextVar holds the last set value for this task
+    assert current_channel_var.get() == "telegram"
+    assert current_chat_id_var.get() == "12345"
 
 
 @pytest.mark.asyncio
