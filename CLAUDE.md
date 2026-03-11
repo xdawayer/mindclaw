@@ -51,7 +51,11 @@ mindclaw/
 │   │   ├── web.py
 │   │   ├── cron.py
 │   │   ├── memory.py
-│   │   └── skill_tools.py        # 技能管理工具 (search/install/remove/list/show)
+│   │   ├── skill_tools.py        # 技能管理工具 (search/install/remove/list/show)
+│   │   ├── api_call.py           # HTTP API 调用 (URL白名单+Auth Profile注入)
+│   │   ├── web_snapshot.py       # 网页快照 (保存/列出/读取，竞品监控)
+│   │   ├── twitter_read.py       # X/Twitter 读取 (CLI子进程，Shell注入防护)
+│   │   └── dashboard_export.py   # 系统仪表盘 (自包含HTML导出)
 │   ├── plugins/       # 插件系统 (loader + hooks)
 │   ├── knowledge/     # 知识层 (memory + session + obsidian + notion)
 │   ├── skills/        # 技能系统 (多目录注册 + 安装管理)
@@ -60,7 +64,13 @@ mindclaw/
 │   │   ├── index_client.py       # 索引拉取、本地缓存 (TTL 24h)、搜索
 │   │   ├── integrity.py          # SHA256 校验、SSRF 过滤、格式校验、大小限制
 │   │   ├── summarize.md          # 内置技能: 文章总结
-│   │   └── translate.md          # 内置技能: 翻译
+│   │   ├── translate.md          # 内置技能: 翻译
+│   │   ├── hot-news.md           # 内置技能: 热点新闻聚合
+│   │   ├── competitor-monitor.md # 内置技能: 竞品监控
+│   │   ├── seo-article.md        # 内置技能: SEO文章生成
+│   │   ├── content-publish.md    # 内置技能: 跨平台发布
+│   │   ├── twitter-browse.md     # 内置技能: X/Twitter浏览
+│   │   └── dashboard.md          # 内置技能: 系统仪表盘
 │   ├── health/        # 健康检查 (HealthMonitor + HTTP /health /ready)
 │   ├── templates/     # SOUL.md / AGENTS.md
 │   └── config/        # Pydantic 配置 (schema + loader)
@@ -82,7 +92,7 @@ mindclaw/
 
 ## Development Phases
 
-当前进度：Phase 10+ 全部完成 — LLM 自动降级、技能系统、定时任务、健康检查、微信渠道、Daemon 部署、向量搜索 (LanceDB)、技能安装系统均已实现
+当前进度：Phase 11 完成 — Bot 自动化场景 (热点新闻/竞品监控/跨平台发布/SEO文章/X浏览/仪表盘) + Cron DANGEROUS 工具自动审批
 
 | Phase | 内容 | 里程碑 |
 |-------|------|--------|
@@ -98,6 +108,7 @@ mindclaw/
 | 9 | 知识管理 (Obsidian/Notion/WebArchive) | 外部知识源整合 |
 | 10 | LLM 自动降级 + 技能系统 + 定时任务 + 健康检查 + 微信渠道 + Daemon 部署 | 生产就绪 |
 | 10+ | 技能安装系统 | 支持从本地/URL/GitHub/索引安装技能 |
+| 11 | Bot 自动化场景 | 6 个自动化 Skill + 3 个新工具 (web_snapshot/twitter_read/dashboard_export) + Cron DANGEROUS 自动审批 |
 
 ---
 

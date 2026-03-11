@@ -192,7 +192,10 @@ class AgentLoop:
             if not self.config.tools.allow_dangerous_tools:
                 logger.warning(f"Blocked DANGEROUS tool '{name}' - not enabled")
                 return f"Error: tool '{name}' requires allowDangerousTools in config"
-            if self.approval_manager is not None:
+            # In cron mode, skip approval for non-blocked tools (no user present)
+            if cron_constraints is not None:
+                logger.info(f"Cron mode: auto-approving DANGEROUS tool '{name}'")
+            elif self.approval_manager is not None:
                 approved = await self.approval_manager.request_approval(
                     tool_name=name,
                     arguments=arguments,

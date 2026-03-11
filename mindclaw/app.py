@@ -2,7 +2,8 @@
 #        orchestrator/subagent.py, security/approval.py, knowledge/session.py,
 #        knowledge/memory.py, knowledge/vector.py, orchestrator/context.py, llm/router.py,
 #        tools/*, gateway/*, plugins/loader.py, plugins/hooks.py,
-#        skills/installer.py, skills/index_client.py, tools/api_call.py
+#        skills/installer.py, skills/index_client.py, tools/api_call.py,
+#        tools/web_snapshot.py, tools/twitter_read.py, tools/dashboard_export.py
 # output: 导出 MindClawApp
 # pos: 顶层编排器，统一管理所有组件的生命周期和消息路由 (含 bounded semaphore 并发控制)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -43,13 +44,20 @@ from mindclaw.tools.cron import (
     CronRemoveTool,
     CronToggleTool,
 )
+from mindclaw.tools.dashboard_export import DashboardExportTool
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from mindclaw.tools.memory import MemorySaveTool, MemorySearchTool
 from mindclaw.tools.message_user import MessageUserTool
 from mindclaw.tools.registry import ToolRegistry
 from mindclaw.tools.shell import ExecTool
 from mindclaw.tools.spawn_task import SpawnTaskTool
+from mindclaw.tools.twitter_read import TwitterReadTool
 from mindclaw.tools.web import WebFetchTool, WebSearchTool
+from mindclaw.tools.web_snapshot import (
+    WebSnapshotListTool,
+    WebSnapshotReadTool,
+    WebSnapshotTool,
+)
 
 
 class MindClawApp:
@@ -226,6 +234,25 @@ class MindClawApp:
         self.tool_registry.register(CronRemoveTool(store=self.cron_store))
         self.tool_registry.register(CronToggleTool(store=self.cron_store))
         self.tool_registry.register(CronHistoryTool(run_logger=self.cron_run_logger))
+
+        # Web snapshot tools
+        data_dir = Path(self.config.knowledge.data_dir)
+        self.tool_registry.register(WebSnapshotTool(data_dir=data_dir))
+        self.tool_registry.register(WebSnapshotListTool(data_dir=data_dir))
+        self.tool_registry.register(WebSnapshotReadTool(data_dir=data_dir))
+
+        # Twitter read tool (only if CLI path configured)
+        if self.config.tools.twitter_cli_path:
+            self.tool_registry.register(
+                TwitterReadTool(cli_path=self.config.tools.twitter_cli_path)
+            )
+
+        # Dashboard export tool
+        self.tool_registry.register(DashboardExportTool(
+            data_dir=data_dir,
+            cron_store=self.cron_store,
+            run_logger=self.cron_run_logger,
+        ))
 
         # Skill tools
         from mindclaw.tools.skill_tools import (

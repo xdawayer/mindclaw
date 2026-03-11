@@ -79,6 +79,7 @@ class ToolsConfig(BaseModel):
     api_call_url_allowlist: list[str] = Field(
         default_factory=list, alias="apiCallUrlAllowlist"
     )
+    twitter_cli_path: str = Field(default="", alias="twitterCliPath")
 
     model_config = {"populate_by_name": True}
 

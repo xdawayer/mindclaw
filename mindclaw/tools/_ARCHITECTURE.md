@@ -17,3 +17,6 @@
 | `memory.py` | 内置工具 | MemorySaveTool (MODERATE) + MemorySearchTool (SAFE) — 长期记忆保存/语义+关键词搜索 |
 | `skill_tools.py` | 内置工具 | LLM 技能管理工具集: skill_search(MODERATE)/skill_show(SAFE)/skill_install(DANGEROUS)/skill_remove(DANGEROUS)/skill_list(SAFE) |
 | `api_call.py` | 内置工具 | ApiCallTool (DANGEROUS) — 带 URL 白名单、SSRF 防护、Auth Profile 注入的 HTTP API 调用工具 |
+| `web_snapshot.py` | 内置工具 | WebSnapshotTool (MODERATE, 保存网页快照) + WebSnapshotListTool (SAFE, 列出快照) + WebSnapshotReadTool (SAFE, 读取快照) — UUID 文件名 + SSRF 防护 |
+| `twitter_read.py` | 内置工具 | TwitterReadTool (MODERATE) — 通过 CLI 子进程安全读取 X/Twitter (timeline/search/user)，shell 注入防护 |
+| `dashboard_export.py` | 内置工具 | DashboardExportTool (MODERATE) — 生成自包含 HTML 系统仪表盘 (cron 任务状态/执行历史/成功率) |

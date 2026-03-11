@@ -11,3 +11,9 @@
 | `integrity.py` | 安全 | SHA256 校验、SSRF 过滤、格式验证、大小限制 |
 | `summarize.md` | 内置技能 | 文章总结技能 (on_demand) |
 | `translate.md` | 内置技能 | 翻译技能 (on_demand) |
+| `hot-news.md` | 内置技能 | 热点新闻聚合 - 多类别搜索+摘要日报 (on_demand) |
+| `competitor-monitor.md` | 内置技能 | 竞品监控 - 网页快照对比+语义差异分析 (on_demand) |
+| `seo-article.md` | 内置技能 | SEO 文章生成 - 关键词研究+草稿写作 (on_demand) |
+| `content-publish.md` | 内置技能 | 跨平台发布 - 通过 api_call 发布内容 (on_demand) |
+| `twitter-browse.md` | 内置技能 | X/Twitter 浏览 - 时间线/搜索/用户动态摘要 (on_demand) |
+| `dashboard.md` | 内置技能 | 系统仪表盘 - 生成 HTML 状态看板 (on_demand) |

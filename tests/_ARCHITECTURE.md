@@ -67,3 +67,7 @@
 | `test_cron_global_enabled.py` | 单元测试 | AgentConfig.cron_enabled + CronScheduler global_enabled_fn 全局开关测试 |
 | `test_cron_history_tool.py` | 单元测试 | CronHistoryTool (查询/过滤/空历史/limit/risk level) 测试 |
 | `test_cron_system_prompt.py` | 单元测试 | ContextBuilder.build_cron_system_prompt (工具限制/迭代限制/超时/base prompt/unattended标记) 测试 |
+| `test_cron_dangerous_bypass.py` | 单元测试 | Cron 模式 DANGEROUS 工具审批绕过 (自动批准/config检查/blocked仍拦截/正常模式不变/SAFE不影响) 测试 |
+| `test_tools_web_snapshot.py` | 单元测试 | WebSnapshot 工具 (保存/UUID文件名/index更新/SSRF/列出/过滤/限制/读取/路径遍历拒绝/risk level) 测试 |
+| `test_tools_twitter_read.py` | 单元测试 | TwitterReadTool (timeline/search/user/shell注入防护/count上限/超时/空路径/exec验证/参数验证) 测试 |
+| `test_tools_dashboard.py` | 单元测试 | DashboardExportTool (HTML生成/任务展示/执行记录/成功率/空数据/路径创建/risk level) 测试 |
