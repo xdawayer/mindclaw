@@ -1,6 +1,6 @@
-# input: tools/base.py, croniter, orchestrator/cron_store.py
-# output: 导出 CronAddTool, CronListTool, CronRemoveTool, CronToggleTool
-# pos: 定时任务工具，通过 CronTaskStore 管理 cron 任务的 CRUD
+# input: tools/base.py, croniter, orchestrator/cron_store.py, orchestrator/cron_logger.py
+# output: 导出 CronAddTool, CronListTool, CronRemoveTool, CronToggleTool, CronHistoryTool
+# pos: 定时任务工具，通过 CronTaskStore 管理 cron 任务的 CRUD + 执行历史查询
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 """Cron task management tools: add, list, remove, toggle scheduled tasks."""
@@ -13,6 +13,7 @@ from datetime import datetime
 from croniter import CroniterBadCronError, croniter
 from loguru import logger
 
+from mindclaw.orchestrator.cron_logger import CronRunLogger
 from mindclaw.orchestrator.cron_store import CronTaskStore
 from mindclaw.tools.base import RiskLevel, Tool
 
@@ -191,3 +192,50 @@ class CronToggleTool(Tool):
         state = "enabled" if enabled else "disabled"
         logger.info(f"Cron task {state}: {task['name']} ({task_id})")
         return f"Task '{task['name']}' (ID: {task_id}) {state}."
+
+
+class CronHistoryTool(Tool):
+    name = "cron_history"
+    description = "View recent cron task execution history"
+    parameters = {
+        "type": "object",
+        "properties": {
+            "task_name": {
+                "type": "string",
+                "description": "Filter by task name (optional)",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max entries to return (default 20)",
+            },
+        },
+    }
+    risk_level = RiskLevel.SAFE
+
+    def __init__(self, run_logger: CronRunLogger) -> None:
+        self._run_logger = run_logger
+
+    async def execute(self, params: dict) -> str:
+        task_name = params.get("task_name")
+        limit = params.get("limit", 20)
+
+        runs = self._run_logger.recent_runs(
+            task_name=task_name, limit=limit,
+        )
+
+        if not runs:
+            return "No execution history found."
+
+        lines: list[str] = []
+        for r in runs:
+            status = r.get("status", "unknown")
+            name = r.get("task_name", "?")
+            started = r.get("started_at", "?")
+            finished = r.get("finished_at", "?")
+            error = r.get("error", "")
+            line = f"- [{status}] {name}: {started} -> {finished}"
+            if error:
+                line += f" (error: {error})"
+            lines.append(line)
+
+        return "\n".join(lines)

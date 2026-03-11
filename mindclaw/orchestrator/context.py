@@ -1,6 +1,7 @@
-# input: knowledge/memory.py, knowledge/vector.py, skills/registry.py
+# input: knowledge/memory.py, knowledge/vector.py, skills/registry.py,
+#        orchestrator/cron_context.py
 # output: 导出 ContextBuilder
-# pos: 动态构建系统提示，注入记忆、日期、技能和语义搜索结果
+# pos: 动态构建系统提示，注入记忆、日期、技能和语义搜索结果 (含 cron 专用提示)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 """Dynamic system prompt builder with memory, skill, and vector search injection."""
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from mindclaw.knowledge.memory import MemoryManager
+from mindclaw.orchestrator.cron_context import CronExecutionConstraints
 
 if TYPE_CHECKING:
     from mindclaw.knowledge.vector import VectorStore
@@ -58,6 +60,26 @@ class ContextBuilder:
                 logger.warning("Vector search failed during context building")
 
         return parts_base
+
+    def build_cron_system_prompt(
+        self, constraints: CronExecutionConstraints,
+    ) -> str:
+        """Build a system prompt for unattended cron/scheduled task execution."""
+        base = self._build_base_prompt()
+
+        blocked = ", ".join(sorted(constraints.blocked_tools)) or "none"
+        cron_section = (
+            "\n\n## Scheduled Task Execution\n"
+            "You are running as an unattended scheduled task. "
+            "Follow these constraints strictly:\n"
+            f"- Max iterations: {constraints.max_iterations}\n"
+            f"- Timeout: {constraints.timeout_seconds} seconds\n"
+            f"- Blocked tools (do NOT call): {blocked}\n"
+            "- Complete the task efficiently within these limits.\n"
+            "- Do not ask follow-up questions; the user is not present."
+        )
+
+        return base + cron_section
 
     def _build_base_prompt(self) -> str:
         """Build the base prompt with date, memory, and skills."""

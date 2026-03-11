@@ -29,10 +29,12 @@ class CronScheduler:
         store: CronTaskStore,
         on_trigger: OnTriggerCallback,
         check_interval: float = 60.0,
+        global_enabled_fn: Callable[[], bool] | None = None,
     ) -> None:
         self._store = store
         self._on_trigger = on_trigger
         self._check_interval = check_interval
+        self._global_enabled_fn = global_enabled_fn
         self._task: asyncio.Task | None = None
         self._running = False
 
@@ -58,6 +60,9 @@ class CronScheduler:
 
     async def check_once(self) -> None:
         """Run a single check cycle (for testing)."""
+        if self._global_enabled_fn is not None and not self._global_enabled_fn():
+            return
+
         tasks = await self._store.load()
         now = datetime.now()
 

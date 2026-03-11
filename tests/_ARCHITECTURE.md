@@ -64,3 +64,6 @@
 | `test_skill_cli.py` | 单元测试 | 技能 CLI 子命令测试 |
 | `test_skills_config.py` | 单元测试 | SkillsConfig Pydantic 配置测试 |
 | `test_cron_logger.py` | 单元测试 | CronRunLogger (文件创建/追加写入/读取/task_name过滤/limit截断/空文件/不存在文件/JSON格式) 测试 |
+| `test_cron_global_enabled.py` | 单元测试 | AgentConfig.cron_enabled + CronScheduler global_enabled_fn 全局开关测试 |
+| `test_cron_history_tool.py` | 单元测试 | CronHistoryTool (查询/过滤/空历史/limit/risk level) 测试 |
+| `test_cron_system_prompt.py` | 单元测试 | ContextBuilder.build_cron_system_prompt (工具限制/迭代限制/超时/base prompt/unattended标记) 测试 |

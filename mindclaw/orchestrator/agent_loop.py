@@ -95,10 +95,20 @@ class AgentLoop:
                 result.append(msg)
         return result
 
-    async def _build_messages(self, history: list[dict], user_text: str) -> list[dict]:
-        system_prompt = await self.context_builder.abuild_system_prompt(
-            user_message=user_text
-        )
+    async def _build_messages(
+        self,
+        history: list[dict],
+        user_text: str,
+        cron_constraints: CronExecutionConstraints | None = None,
+    ) -> list[dict]:
+        if cron_constraints is not None:
+            system_prompt = self.context_builder.build_cron_system_prompt(
+                cron_constraints
+            )
+        else:
+            system_prompt = await self.context_builder.abuild_system_prompt(
+                user_message=user_text
+            )
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(history)
         messages.append({"role": "user", "content": user_text})
@@ -259,7 +269,9 @@ class AgentLoop:
             else max(1, self.config.agent.max_iterations)
         )
 
-        messages = await self._build_messages(history, inbound.text)
+        messages = await self._build_messages(
+            history, inbound.text, cron_constraints=cron_constraints,
+        )
         tools = self.tool_registry.to_openai_tools() or None
 
         # Model routing: classify user intent and select appropriate model

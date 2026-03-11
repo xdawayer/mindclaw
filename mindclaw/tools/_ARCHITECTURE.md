@@ -13,7 +13,7 @@
 | `web.py` | 内置工具 | WebFetchTool (流式网页抓取 + SSRF 防护, max_result_chars=5000) + WebSearchTool (Tavily 搜索, max_result_chars=3000) |
 | `message_user.py` | 内置工具 | MessageUserTool - 主动发消息给用户 (MODERATE)，channel/chat_id 由 AgentLoop 动态更新 |
 | `spawn_task.py` | 内置工具 | SpawnTaskTool - 派发子 Agent 任务 (DANGEROUS)，通过 SubAgentManager 管理 |
-| `cron.py` | 内置工具 | CronAddTool / CronListTool / CronRemoveTool - 定时任务 CRUD (MODERATE)，持久化到 cron_tasks.json |
+| `cron.py` | 内置工具 | CronAddTool / CronListTool / CronRemoveTool / CronToggleTool / CronHistoryTool - 定时任务 CRUD + 执行历史查询 |
 | `memory.py` | 内置工具 | MemorySaveTool (MODERATE) + MemorySearchTool (SAFE) — 长期记忆保存/语义+关键词搜索 |
 | `skill_tools.py` | 内置工具 | LLM 技能管理工具集: skill_search(MODERATE)/skill_show(SAFE)/skill_install(DANGEROUS)/skill_remove(DANGEROUS)/skill_list(SAFE) |
 | `api_call.py` | 内置工具 | ApiCallTool (DANGEROUS) — 带 URL 白名单、SSRF 防护、Auth Profile 注入的 HTTP API 调用工具 |

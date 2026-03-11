@@ -25,6 +25,7 @@ from mindclaw.knowledge.vector import VectorStore
 from mindclaw.llm.router import LLMRouter
 from mindclaw.orchestrator.agent_loop import AgentLoop
 from mindclaw.orchestrator.context import ContextBuilder
+from mindclaw.orchestrator.cron_logger import CronRunLogger
 from mindclaw.orchestrator.cron_scheduler import CronScheduler
 from mindclaw.orchestrator.cron_store import CronTaskStore
 from mindclaw.orchestrator.subagent import SubAgentManager
@@ -35,7 +36,13 @@ from mindclaw.skills.index_client import IndexClient
 from mindclaw.skills.installer import SkillInstaller
 from mindclaw.skills.registry import SkillRegistry
 from mindclaw.tools.api_call import ApiCallTool
-from mindclaw.tools.cron import CronAddTool, CronListTool, CronRemoveTool, CronToggleTool
+from mindclaw.tools.cron import (
+    CronAddTool,
+    CronHistoryTool,
+    CronListTool,
+    CronRemoveTool,
+    CronToggleTool,
+)
 from mindclaw.tools.file_ops import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from mindclaw.tools.memory import MemorySaveTool, MemorySearchTool
 from mindclaw.tools.message_user import MessageUserTool
@@ -104,11 +111,13 @@ class MindClawApp:
             vector_store=self.vector_store,
         )
 
-        # Cron store + scheduler
+        # Cron store + scheduler + logger
         self.cron_store = CronTaskStore(data_dir=data_dir)
+        self.cron_run_logger = CronRunLogger(data_dir=data_dir)
         self.cron_scheduler = CronScheduler(
             store=self.cron_store,
             on_trigger=self._on_cron_trigger,
+            global_enabled_fn=lambda: self.config.agent.cron_enabled,
         )
 
         # Health check
@@ -216,6 +225,7 @@ class MindClawApp:
         self.tool_registry.register(CronListTool(store=self.cron_store))
         self.tool_registry.register(CronRemoveTool(store=self.cron_store))
         self.tool_registry.register(CronToggleTool(store=self.cron_store))
+        self.tool_registry.register(CronHistoryTool(run_logger=self.cron_run_logger))
 
         # Skill tools
         from mindclaw.tools.skill_tools import (
