@@ -20,3 +20,4 @@
 | `web_snapshot.py` | 内置工具 | WebSnapshotTool (MODERATE, 保存网页快照) + WebSnapshotListTool (SAFE, 列出快照) + WebSnapshotReadTool (SAFE, 读取快照) — UUID 文件名 + SSRF 防护 |
 | `twitter_read.py` | 内置工具 | TwitterReadTool (MODERATE) — 通过 CLI 子进程安全读取 X/Twitter (timeline/search/user)，shell 注入防护 |
 | `dashboard_export.py` | 内置工具 | DashboardExportTool (MODERATE) — 生成自包含 HTML 系统仪表盘 (cron 任务状态/执行历史/成功率) |
+| `bosszp.py` | 内置工具 | BossZPSearchTool (MODERATE) — Boss直聘职位搜索 (Patchright 反检测浏览器, XHR拦截+DOM回退, session管理+限流) |

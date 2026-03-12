@@ -3,7 +3,8 @@
 #        knowledge/memory.py, knowledge/vector.py, orchestrator/context.py, llm/router.py,
 #        tools/*, gateway/*, plugins/loader.py, plugins/hooks.py,
 #        skills/installer.py, skills/index_client.py, tools/api_call.py,
-#        tools/web_snapshot.py, tools/twitter_read.py, tools/dashboard_export.py
+#        tools/web_snapshot.py, tools/twitter_read.py, tools/dashboard_export.py,
+#        tools/bosszp.py
 # output: 导出 MindClawApp
 # pos: 顶层编排器，管理组件生命周期和消息路由 (semaphore 并发 + per-session lock)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -249,6 +250,30 @@ class MindClawApp:
             run_logger=self.cron_run_logger,
         ))
 
+        # Boss直聘 search tool (only if enabled)
+        bosszp_cfg = self.config.tools.bosszp
+        if bosszp_cfg.enabled:
+            try:
+                from mindclaw.tools.bosszp import BossZPSearchTool
+
+                session_path = Path(bosszp_cfg.session_path) if bosszp_cfg.session_path else (
+                    data_dir / "bosszp_session.json"
+                )
+                self.tool_registry.register(BossZPSearchTool(
+                    session_path=session_path,
+                    proxy=bosszp_cfg.proxy,
+                    min_delay=bosszp_cfg.min_delay,
+                    max_delay=bosszp_cfg.max_delay,
+                    daily_cap=bosszp_cfg.daily_cap,
+                    page_limit=bosszp_cfg.page_limit,
+                    headless=bosszp_cfg.headless,
+                ))
+            except ImportError:
+                logger.warning(
+                    "Boss直聘 tool enabled but patchright not installed. "
+                    "Install with: pip install patchright && patchright install chromium"
+                )
+
         # Skill tools
         from mindclaw.tools.skill_tools import (
             SkillInstallTool,
@@ -452,6 +477,13 @@ class MindClawApp:
     # ── Message routing ───────────────────────────────────────
 
     async def _process_message(self, msg: InboundMessage) -> None:
+        is_cron = msg.channel == "system" and msg.user_id == "cron"
+        cron_task_name = msg.metadata.get("cron_task_name", "") if is_cron else ""
+        started_at = ""
+        if is_cron:
+            from datetime import datetime
+            started_at = datetime.now().isoformat()
+
         try:
             # on_message hook
             await self.hook_registry.call(
@@ -462,7 +494,27 @@ class MindClawApp:
                 text=msg.text,
             )
             await self.agent_loop.handle_message(msg)
+
+            # Log successful cron run
+            if is_cron and cron_task_name:
+                from datetime import datetime
+                self.cron_run_logger.log_run(
+                    task_name=cron_task_name,
+                    status="completed",
+                    started_at=started_at,
+                    finished_at=datetime.now().isoformat(),
+                )
         except Exception as exc:
+            # Log failed cron run
+            if is_cron and cron_task_name:
+                from datetime import datetime
+                self.cron_run_logger.log_run(
+                    task_name=cron_task_name,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=datetime.now().isoformat(),
+                    error=str(exc)[:500],
+                )
             logger.exception("Agent error")
             try:
                 # on_error hook

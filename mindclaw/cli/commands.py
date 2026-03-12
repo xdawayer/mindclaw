@@ -1,6 +1,7 @@
-# input: typer, app.py, config/loader.py, security/crypto.py, oauth/, cli/skill_commands.py
+# input: typer, app.py, config/loader.py, security/crypto.py, oauth/, cli/skill_commands.py,
+#        tools/bosszp.py
 # output: 导出 app (Typer 应用)
-# pos: CLI 入口，chat/serve/secret/auth/skill 命令
+# pos: CLI 入口，chat/serve/secret/auth/skill/bosszp-login 命令
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
@@ -273,6 +274,46 @@ def auth_logout(
     token_store.init_or_load_key()
     token_store.delete_token(provider)
     console.print(f"Logged out from {provider}.")
+
+
+@app.command("bosszp-login")
+def bosszp_login(
+    config: Path = typer.Option(None, "--config", "-c", help="Path to config.json"),
+) -> None:
+    """Login to Boss直聘 via QR code scan (opens a browser window)."""
+    cfg = load_config(config)
+    data_dir = Path(cfg.knowledge.data_dir)
+
+    bosszp_cfg = cfg.tools.bosszp
+    session_path = Path(bosszp_cfg.session_path) if bosszp_cfg.session_path else (
+        data_dir / "bosszp_session.json"
+    )
+
+    try:
+        from mindclaw.tools.bosszp import _SessionManager
+    except ImportError:
+        console.print(
+            "patchright is required. Install with:\n"
+            "  pip install patchright && patchright install chromium"
+        )
+        raise typer.Exit(1)
+
+    session = _SessionManager(
+        session_path=session_path,
+        proxy=bosszp_cfg.proxy,
+        headless=False,
+        page_limit=bosszp_cfg.page_limit,
+    )
+
+    console.print("Opening browser for Boss直聘 QR code login...")
+    console.print("Please scan the QR code with Boss直聘 app.")
+
+    success = asyncio.run(session.login_interactive())
+    if success:
+        console.print(f"Login successful! Session saved to {session_path}")
+    else:
+        console.print("Login failed or timed out. Please try again.")
+        raise typer.Exit(1)
 
 
 @app.command()

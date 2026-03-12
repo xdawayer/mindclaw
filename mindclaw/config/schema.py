@@ -2,8 +2,8 @@
 # output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ChannelConfig, ProviderSettings,
 #         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig,
 #         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig, SkillsConfig,
-#         AuthProfileConfig
-# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置、技能安装配置、API 调用鉴权配置)
+#         AuthProfileConfig, BossZPConfig
+# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置、技能安装配置、API 调用鉴权配置、Boss直聘配置)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from typing import Literal
@@ -69,6 +69,19 @@ class AuthProfileConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class BossZPConfig(BaseModel):
+    enabled: bool = False
+    session_path: str = Field(default="", alias="sessionPath")
+    proxy: str = ""
+    min_delay: float = Field(default=3.0, alias="minDelay")
+    max_delay: float = Field(default=8.0, alias="maxDelay")
+    daily_cap: int = Field(default=100, alias="dailyCap")
+    page_limit: int = Field(default=4, alias="pageLimit")
+    headless: bool = True
+
+    model_config = {"populate_by_name": True}
+
+
 class ToolsConfig(BaseModel):
     exec_timeout: int = Field(default=30, alias="execTimeout")
     tool_result_max_chars: int = Field(default=500, alias="toolResultMaxChars")
@@ -81,6 +94,7 @@ class ToolsConfig(BaseModel):
         default_factory=list, alias="apiCallUrlAllowlist"
     )
     twitter_cli_path: str = Field(default="", alias="twitterCliPath")
+    bosszp: BossZPConfig = Field(default_factory=BossZPConfig, alias="bossZP")
 
     model_config = {"populate_by_name": True}
 
