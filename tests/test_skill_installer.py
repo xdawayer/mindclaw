@@ -7,13 +7,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from textwrap import dedent
 
 import pytest
 
 from mindclaw.skills.registry import SkillRegistry
-
 
 # ---------------------------------------------------------------------------
 # Helpers

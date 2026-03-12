@@ -30,6 +30,7 @@ from mindclaw.tools.base import RiskLevel
 from mindclaw.tools.registry import ToolRegistry
 
 MAX_HISTORY_MESSAGES = 100
+MAX_HISTORY_CHARS = 50_000  # Estimated safe limit for LLM context
 
 # Per-task context variables for the current channel/chat_id.
 # Each asyncio task gets its own copy, eliminating the shared-state race condition
@@ -79,7 +80,36 @@ class AgentLoop:
             while cutoff > 0 and history[cutoff].get("role") != "user":
                 cutoff -= 1
             history = history[cutoff:]
-        return self._sanitize_history(history)
+        history = self._sanitize_history(history)
+        return self._trim_history_by_size(history)
+
+    @staticmethod
+    def _estimate_msg_chars(msg: dict) -> int:
+        """Estimate the character count of a message for context size budgeting."""
+        total = len(msg.get("content", "") or "")
+        for tc in msg.get("tool_calls", []):
+            fn = tc.get("function", {})
+            total += len(fn.get("name", "")) + len(fn.get("arguments", ""))
+        return total
+
+    @staticmethod
+    def _trim_history_by_size(history: list[dict]) -> list[dict]:
+        """Drop oldest messages until total chars fits within MAX_HISTORY_CHARS."""
+        total_chars = sum(AgentLoop._estimate_msg_chars(m) for m in history)
+        if total_chars <= MAX_HISTORY_CHARS:
+            return history
+        # Trim from the front, keeping the most recent messages
+        trimmed = list(history)
+        while trimmed and total_chars > MAX_HISTORY_CHARS:
+            total_chars -= AgentLoop._estimate_msg_chars(trimmed[0])
+            trimmed.pop(0)
+        # Ensure we start with a user message (not orphaned tool/assistant)
+        while trimmed and trimmed[0].get("role") not in ("user", "system"):
+            trimmed.pop(0)
+        logger.debug(
+            f"History trimmed by size: {len(history)} → {len(trimmed)} messages"
+        )
+        return trimmed
 
     @staticmethod
     def _sanitize_history(history: list[dict]) -> list[dict]:
@@ -134,14 +164,28 @@ class AgentLoop:
         cron_constraints: CronExecutionConstraints | None = None,
         timeout_seconds: float | None = None,
     ) -> str:
-        """Core ReAct loop, optionally wrapped with asyncio timeout."""
-        coro = self._agent_loop_inner(
-            messages, tools, max_iterations, routed_model, channel, chat_id,
-            cron_constraints,
+        """Core ReAct loop with per-step timeout.
+
+        For cron tasks the timeout wraps the entire loop (no user present).
+        For interactive messages the timeout applies per LLM call so that
+        time spent waiting for user approval is not counted.
+        """
+        if cron_constraints is not None and timeout_seconds is not None:
+            # Cron: wrap entire loop (no approval waits)
+            return await asyncio.wait_for(
+                self._agent_loop_inner(
+                    messages, tools, max_iterations, routed_model,
+                    channel, chat_id, cron_constraints,
+                    per_call_timeout=None,
+                ),
+                timeout=timeout_seconds,
+            )
+        # Interactive: per-call timeout (approval wait excluded)
+        return await self._agent_loop_inner(
+            messages, tools, max_iterations, routed_model,
+            channel, chat_id, cron_constraints,
+            per_call_timeout=timeout_seconds,
         )
-        if timeout_seconds is not None:
-            return await asyncio.wait_for(coro, timeout=timeout_seconds)
-        return await coro
 
     async def _agent_loop_inner(
         self,
@@ -152,14 +196,19 @@ class AgentLoop:
         channel: str,
         chat_id: str,
         cron_constraints: CronExecutionConstraints | None = None,
+        per_call_timeout: float | None = None,
     ) -> str:
         """Inner ReAct loop (tool calls + LLM turns)."""
         iteration = 0
         while iteration < max_iterations:
             iteration += 1
-            result = await self.router.chat(
+            chat_coro = self.router.chat(
                 messages=messages, tools=tools, model=routed_model,
             )
+            if per_call_timeout is not None:
+                result = await asyncio.wait_for(chat_coro, timeout=per_call_timeout)
+            else:
+                result = await chat_coro
 
             if not result.tool_calls:
                 return result.content or "(no response)"
@@ -286,6 +335,12 @@ class AgentLoop:
             metadata=inbound.metadata,
         )
 
+        # Send immediate acknowledgement for interactive messages
+        if cron_constraints is None and channel != "system":
+            await self.bus.put_outbound(OutboundMessage(
+                channel=channel, chat_id=chat_id, text="Received, processing...",
+            ))
+
         history = self._get_history(session_key)
         initial_history_len = len(history)
         max_iterations = (
@@ -309,6 +364,12 @@ class AgentLoop:
             f"category={category}, model={routed_model}"
         )
 
+        # Timeout: cron uses its own, regular messages use config default
+        if cron_constraints:
+            timeout = cron_constraints.timeout_seconds
+        else:
+            timeout = float(self.config.agent.message_timeout)
+
         try:
             reply_text = await self._run_agent_loop(
                 messages=messages,
@@ -318,18 +379,20 @@ class AgentLoop:
                 channel=channel,
                 chat_id=chat_id,
                 cron_constraints=cron_constraints,
-                timeout_seconds=(
-                    cron_constraints.timeout_seconds if cron_constraints else None
-                ),
+                timeout_seconds=timeout,
             )
         except asyncio.TimeoutError:
-            # Do not persist partial state from timed-out execution
-            logger.warning(f"Cron task timed out: session={session_key}")
+            logger.warning(f"Agent timed out ({timeout}s): session={session_key}")
             out_channel = notify_channel or inbound.channel
             out_chat_id = notify_chat_id or inbound.chat_id
             if out_channel != "system":
+                timeout_msg = (
+                    "Cron task timed out."
+                    if cron_constraints
+                    else "Response timed out. Please try again."
+                )
                 await self.bus.put_outbound(OutboundMessage(
-                    channel=out_channel, chat_id=out_chat_id, text="Cron task timed out.",
+                    channel=out_channel, chat_id=out_chat_id, text=timeout_msg,
                 ))
             return
         except Exception:

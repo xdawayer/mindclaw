@@ -3,7 +3,6 @@
 # pos: 验证健康检查 HTTP 端点的响应和渠道状态追踪
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-import json
 
 import pytest
 

@@ -94,9 +94,7 @@ async def test_concurrent_approval_goes_to_correct_channel():
 
     # Events used to deterministically interleave the two coroutines:
     # b_has_set_state: fires after B sets _current_channel/_current_chat_id
-    # a_can_return_tool_call: fires to let A's LLM call return AFTER B has set state
     b_has_set_state = asyncio.Event()
-    a_can_return_tool_call = asyncio.Event()
 
     # Build tool-call results
     tc_a = _make_tool_call("call_a1", "slow_exec", {"command": "cmd_A"})

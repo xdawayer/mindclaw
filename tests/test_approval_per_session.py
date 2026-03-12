@@ -11,9 +11,10 @@ approval. Other sessions should continue to work normally.
 """
 
 import asyncio
+
 import pytest
 
-from mindclaw.bus.events import InboundMessage, OutboundMessage
+from mindclaw.bus.events import InboundMessage
 from mindclaw.bus.queue import MessageBus
 from mindclaw.security.approval import ApprovalManager
 

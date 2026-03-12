@@ -204,6 +204,10 @@ async def test_non_cron_uses_config_max_iterations(tmp_path):
     with patch.object(router, "chat", side_effect=mock_chat):
         await agent.handle_message(inbound)
 
+    # First outbound: acknowledgement message
+    ack = await bus.get_outbound()
+    assert ack.text == "Received, processing..."
+    # Second outbound: max iterations message
     outbound = await bus.get_outbound()
     assert call_count == 3
     assert "max iterations" in outbound.text.lower()

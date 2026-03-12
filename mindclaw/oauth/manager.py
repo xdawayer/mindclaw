@@ -15,6 +15,7 @@ from .pkce import generate_pkce_pair
 from .providers import OAUTH_PROVIDERS
 from .token_store import OAuthTokenInfo, OAuthTokenStore
 
+
 class OAuthManager:
     """Manages OAuth authorization flows, token exchange, and refresh."""
 

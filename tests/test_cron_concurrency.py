@@ -51,6 +51,8 @@ async def test_concurrent_messages_not_blocked():
     app._gateway_auth = None
     app.approval_manager = Mock()
     app.approval_manager.has_pending.return_value = False
+    app.approval_manager.is_approval_reply.return_value = False
+    app.approval_manager.is_resume_request.return_value = False
     app._task_semaphore = asyncio.Semaphore(3)
     app._active_tasks = set()
     app._session_locks = {}
@@ -85,7 +87,9 @@ async def test_concurrent_messages_not_blocked():
     except asyncio.CancelledError:
         pass
 
-    assert max_concurrent >= 2, f"Expected concurrent execution, got max_concurrent={max_concurrent}"
+    assert max_concurrent >= 2, (
+        f"Expected concurrent execution, got max_concurrent={max_concurrent}"
+    )
 
 
 @pytest.mark.asyncio
@@ -102,6 +106,8 @@ async def test_semaphore_limits_concurrency():
     app._gateway_auth = None
     app.approval_manager = Mock()
     app.approval_manager.has_pending.return_value = False
+    app.approval_manager.is_approval_reply.return_value = False
+    app.approval_manager.is_resume_request.return_value = False
     app._task_semaphore = asyncio.Semaphore(2)
     app._active_tasks = set()
     app._session_locks = {}

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -400,7 +399,7 @@ class TestCacheBehavior:
         mock_async_client.get = AsyncMock(return_value=mock_response)
 
         with patch("mindclaw.skills.index_client.httpx.AsyncClient", return_value=mock_async_client):
-            results = await client.search("debug")
+            await client.search("debug")
 
         cache_file = cache_dir / "skill-index.json"
         assert cache_file.exists()

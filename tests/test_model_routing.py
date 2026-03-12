@@ -3,11 +3,9 @@
 # pos: 意图分类 + 模型路由集成测试
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-import pytest
 
 from mindclaw.config.schema import AgentConfig, MindClawConfig, ModelRoutingConfig
 from mindclaw.llm.classifier import classify_intent
-
 
 # ── ModelRoutingConfig ──
 

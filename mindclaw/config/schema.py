@@ -24,6 +24,7 @@ class AgentConfig(BaseModel):
     max_iterations: int = Field(default=40, alias="maxIterations")
     subagent_max_iterations: int = Field(default=15, alias="subagentMaxIterations")
     max_concurrent_tasks: int = Field(default=3, alias="maxConcurrentTasks", ge=1)
+    message_timeout: int = Field(default=120, alias="messageTimeout")
     cron_enabled: bool = Field(default=True, alias="cronEnabled")
     model_routing: ModelRoutingConfig = Field(
         default_factory=ModelRoutingConfig, alias="modelRouting"

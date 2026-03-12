@@ -5,9 +5,6 @@
 
 import platform
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 
 def test_detect_platform():

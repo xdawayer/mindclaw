@@ -579,9 +579,9 @@ class TestEdgeCases:
         cfg = MindClawConfig()
         registry, index_client, installer = _build_components(cfg, tmp_path)
 
-        from mindclaw.skills.registry import SkillRegistry
         from mindclaw.skills.index_client import IndexClient
         from mindclaw.skills.installer import SkillInstaller
+        from mindclaw.skills.registry import SkillRegistry
 
         assert isinstance(registry, SkillRegistry)
         assert isinstance(index_client, IndexClient)

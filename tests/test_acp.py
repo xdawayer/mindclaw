@@ -3,13 +3,11 @@
 # pos: 编排层子进程管理测试
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-import asyncio
 import json
 
 import pytest
 
 from mindclaw.orchestrator.acp import AgentHandle, AgentStatus, TaskRequest, TaskResult
-
 
 # ── TaskRequest / TaskResult dataclass tests ──
 
@@ -120,7 +118,7 @@ async def test_agent_handle_timeout():
         timeout=0.1,
     )
 
-    result = await handle.wait()
+    await handle.wait()
     # Should timeout or complete - either way status is set
     assert handle.status in (AgentStatus.TIMEOUT, AgentStatus.COMPLETED, AgentStatus.FAILED)
 

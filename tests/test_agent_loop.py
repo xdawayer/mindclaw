@@ -34,7 +34,10 @@ async def test_agent_loop_simple_reply():
     with patch.object(router, "chat", return_value=mock_result):
         await agent.handle_message(inbound)
 
-    # 验证回复被放入 outbound 队列
+    # First outbound: acknowledgement message
+    ack = await bus.get_outbound()
+    assert ack.text == "Received, processing..."
+    # Second outbound: actual LLM reply
     outbound = await bus.get_outbound()
     assert outbound.text == "Python is a programming language."
     assert outbound.channel == "cli"

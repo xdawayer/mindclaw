@@ -3,7 +3,6 @@
 # pos: 验证 skill_search/list/show/install/remove 工具的风险等级和执行行为
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
-from pathlib import Path
 from textwrap import dedent
 
 import pytest
@@ -28,8 +27,8 @@ def tool_setup(tmp_path):
     user = tmp_path / "user"
     user.mkdir()
 
-    from mindclaw.skills.registry import SkillRegistry
     from mindclaw.skills.installer import SkillInstaller
+    from mindclaw.skills.registry import SkillRegistry
 
     registry = SkillRegistry([builtin, user])
     installer = SkillInstaller(

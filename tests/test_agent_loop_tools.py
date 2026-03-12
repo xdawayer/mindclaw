@@ -83,6 +83,10 @@ async def test_agent_loop_with_tool_call():
     with patch.object(router, "chat", side_effect=mock_chat):
         await agent.handle_message(inbound)
 
+    # First outbound: acknowledgement message
+    ack = await bus.get_outbound()
+    assert ack.text == "Received, processing..."
+    # Second outbound: actual LLM reply
     outbound = await bus.get_outbound()
     assert "hello world" in outbound.text
     assert call_count == 2
@@ -115,6 +119,10 @@ async def test_agent_loop_max_iterations():
     with patch.object(router, "chat", return_value=infinite_call):
         await agent.handle_message(inbound)
 
+    # First outbound: acknowledgement message
+    ack = await bus.get_outbound()
+    assert ack.text == "Received, processing..."
+    # Second outbound: max iterations message
     outbound = await bus.get_outbound()
     assert "max iterations" in outbound.text.lower() or "iteration" in outbound.text.lower()
 
