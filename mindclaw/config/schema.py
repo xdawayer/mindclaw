@@ -3,7 +3,7 @@
 #         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig,
 #         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig, SkillsConfig,
 #         AuthProfileConfig, BossZPConfig
-# pos: 配置层核心，定义所有配置的 Pydantic 模型 (含向量数据库配置、技能安装配置、API 调用鉴权配置、Boss直聘配置)
+# pos: 配置层核心，Pydantic 模型 (向量数据库/技能安装/API鉴权/Boss直聘配置)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from typing import Literal
