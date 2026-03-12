@@ -494,6 +494,27 @@ class MindClawApp:
         if exc is not None:
             logger.error(f"Agent task failed with unhandled exception: {exc}")
 
+    async def _retry_approval_guarded(self, msg: InboundMessage) -> None:
+        """Retry the last failed approval request with semaphore release guarantee."""
+        try:
+            session_key = msg.session_key
+            if session_key not in self._session_locks:
+                self._session_locks[session_key] = asyncio.Lock()
+            async with self._session_locks[session_key]:
+                approved = await self.approval_manager.retry_last()
+                if approved:
+                    # Re-process the original user message so the agent loop
+                    # can pick up where it left off with fresh context.
+                    await self._process_message(msg)
+                else:
+                    await self.bus.put_outbound(OutboundMessage(
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
+                        text="Action not approved. Send the task again when ready.",
+                    ))
+        finally:
+            self._task_semaphore.release()
+
     async def _process_message_guarded(self, msg: InboundMessage) -> None:
         """Process message with semaphore release guarantee and per-session serialization.
 
@@ -529,9 +550,32 @@ class MindClawApp:
                 self.approval_manager.resolve(msg.text)
                 continue
 
-            # 3. Drop non-approval messages only for the same session that has a pending approval
+            # 3. Drop non-approval messages while approval is pending (with notification)
             if self.approval_manager.has_pending(session_key=msg.session_key):
                 logger.debug(f"Ignoring message during pending approval: {msg.text[:50]}")
+                await self.bus.put_outbound(OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    text="Waiting for approval. Reply 'yes' to approve or 'no' to reject.",
+                ))
+                continue
+
+            # 3b. Resume: retry last failed approval if user says "继续执行" etc.
+            if self.approval_manager.is_resume_request(
+                msg.text, channel=msg.channel, chat_id=msg.chat_id
+            ):
+                logger.info(f"Resuming last failed approval from: {msg.text[:50]}")
+                await self._task_semaphore.acquire()
+                try:
+                    task = asyncio.create_task(
+                        self._retry_approval_guarded(msg)
+                    )
+                except BaseException:
+                    self._task_semaphore.release()
+                    raise
+                self._active_tasks.add(task)
+                task.add_done_callback(self._active_tasks.discard)
+                task.add_done_callback(self._task_done_callback)
                 continue
 
             # 4. Acquire semaphore and dispatch task concurrently

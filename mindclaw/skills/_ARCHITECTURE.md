@@ -17,3 +17,7 @@
 | `content-publish.md` | 内置技能 | 跨平台发布 - 通过 api_call 发布内容 (on_demand) |
 | `twitter-browse.md` | 内置技能 | X/Twitter 浏览 - 时间线/搜索/用户动态摘要 (on_demand) |
 | `dashboard.md` | 内置技能 | 系统仪表盘 - 生成 HTML 状态看板 (on_demand) |
+| `agent-browser.md` | 内置技能 | 无头浏览器自动化 - 通过 exec + agent-browser CLI (on_demand) |
+| `github-ops.md` | 内置技能 | GitHub 操作 - 通过 exec + gh CLI (on_demand) |
+| `google-workspace.md` | 内置技能 | Google Workspace - 通过 exec + gog CLI (on_demand) |
+| `self-improving.md` | 内置技能 | 自我改进 - 记录错误/纠正/学习 (always) |

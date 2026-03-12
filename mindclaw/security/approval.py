@@ -4,6 +4,7 @@
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 import asyncio
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -16,6 +17,19 @@ from mindclaw.bus.queue import MessageBus
 _APPROVE_WORDS = frozenset({"yes", "y", "approve"})
 _REJECT_WORDS = frozenset({"no", "n", "reject"})
 _ALL_REPLY_WORDS = _APPROVE_WORDS | _REJECT_WORDS
+
+# Patterns that indicate user wants to retry the last timed-out/rejected tool.
+_RESUME_PATTERN = re.compile(
+    r"^(continue|resume|retry|yes|"
+    r"[\u7ee7\u7eed][\u6267\u884c]?|"  # 继续(执行)?
+    r"[\u91cd\u8bd5]|"                  # 重试
+    r"[\u6267\u884c]|"                  # 执行
+    r"[\u7ee7\u7eed][\u4e0a\u9762])",   # 继续上面
+    re.IGNORECASE,
+)
+
+# How long a failed request stays retryable (seconds).
+_RETRY_WINDOW = 600.0
 
 
 @dataclass
@@ -38,12 +52,18 @@ class ApprovalManager:
     2. An approval request is sent to the user via the message bus
     3. The call awaits the user's response (or timeout)
     4. The message router calls resolve() when an approval reply arrives
+
+    Retry support:
+    - After timeout or rejection, the request is saved in _last_failed
+    - If the user sends a resume-like message within _RETRY_WINDOW,
+      the message router can call retry_last() to re-request approval
     """
 
     def __init__(self, bus: MessageBus, timeout: float = 300.0) -> None:
         self.bus = bus
         self.timeout = timeout
         self._pending: ApprovalRequest | None = None
+        self._last_failed: ApprovalRequest | None = None
 
     def has_pending(self, session_key: str | None = None) -> bool:
         """Return True if there is a pending approval.
@@ -69,6 +89,36 @@ class ApprovalManager:
         if chat_id and self._pending.chat_id != chat_id:
             return False
         return text.strip().lower() in _ALL_REPLY_WORDS
+
+    def is_resume_request(self, text: str, channel: str = "", chat_id: str = "") -> bool:
+        """Return True if user wants to retry the last failed approval."""
+        if self._last_failed is None:
+            return False
+        if channel and self._last_failed.channel != channel:
+            return False
+        if chat_id and self._last_failed.chat_id != chat_id:
+            return False
+        if time.time() - self._last_failed.created_at > _RETRY_WINDOW:
+            self._last_failed = None
+            return False
+        return bool(_RESUME_PATTERN.search(text.strip()))
+
+    async def retry_last(self) -> bool:
+        """Re-request approval for the last failed tool.
+
+        Returns True if the user approves this time, False otherwise.
+        Clears _last_failed regardless of outcome.
+        """
+        failed = self._last_failed
+        if failed is None:
+            return False
+        self._last_failed = None
+        return await self.request_approval(
+            tool_name=failed.tool_name,
+            arguments=failed.arguments,
+            channel=failed.channel,
+            chat_id=failed.chat_id,
+        )
 
     async def request_approval(
         self,
@@ -105,11 +155,32 @@ class ApprovalManager:
         except asyncio.TimeoutError:
             approved = False
             logger.warning(f"Approval timeout: {approval_id}")
+            # Save for retry
+            self._last_failed = ApprovalRequest(
+                approval_id=approval_id,
+                tool_name=tool_name,
+                arguments=arguments,
+                channel=channel,
+                chat_id=chat_id,
+            )
             await self.bus.put_outbound(OutboundMessage(
                 channel=channel,
                 chat_id=chat_id,
-                text=f"Approval timed out after {int(self.timeout)}s. Action rejected.",
+                text=(
+                    f"Approval timed out after {int(self.timeout)}s. Action rejected.\n"
+                    f"Reply '继续执行' to retry."
+                ),
             ))
+        else:
+            if not approved:
+                # User explicitly rejected; save for possible retry
+                self._last_failed = ApprovalRequest(
+                    approval_id=approval_id,
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    channel=channel,
+                    chat_id=chat_id,
+                )
         finally:
             self._pending = None
 
