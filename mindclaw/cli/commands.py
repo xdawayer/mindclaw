@@ -288,7 +288,7 @@ def bosszp_login(
     session_path = (
         Path(bosszp_cfg.session_path).resolve()
         if bosszp_cfg.session_path
-        else data_dir / "bosszp_session.json"
+        else (data_dir / "bosszp_session.json").resolve()
     )
     if not str(session_path).startswith(str(data_dir.resolve())):
         console.print(f"Error: session_path must be inside data_dir ({data_dir})")

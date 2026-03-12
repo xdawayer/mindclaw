@@ -285,7 +285,7 @@ class TestBossZPSearchTool:
     async def test_patchright_import_error(self, tmp_path):
         tool = self._make_tool(tmp_path)
         with patch(
-            "mindclaw.tools.bosszp._import_patchright",
+            "mindclaw.tools.bosszp._import_async_playwright",
             side_effect=ImportError("patchright not installed"),
         ):
             result = await tool.execute({"query": "Python"})

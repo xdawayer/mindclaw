@@ -162,10 +162,10 @@ class _SessionManager:
     async def create_context(self):
         """Create a new browser context with saved cookies.
 
-        Returns (browser, context) tuple. Caller must close both.
+        Returns (pw, browser, context) tuple. Caller must close all.
         """
-        patchright = _import_patchright()
-        pw = await patchright.async_playwright().start()
+        async_playwright = _import_async_playwright()
+        pw = await async_playwright().start()
 
         launch_args = {"headless": self._headless}
         browser = await pw.chromium.launch(**launch_args)
@@ -185,8 +185,8 @@ class _SessionManager:
 
     async def login_interactive(self) -> bool:
         """Open headed browser for user QR code login. Save cookies on success."""
-        patchright = _import_patchright()
-        pw = await patchright.async_playwright().start()
+        async_playwright = _import_async_playwright()
+        pw = await async_playwright().start()
 
         try:
             browser = await pw.chromium.launch(headless=False)
@@ -250,11 +250,11 @@ class _SessionManager:
 # ── Helper Functions ──────────────────────────────────────
 
 
-def _import_patchright():
-    """Lazy import patchright to keep it optional."""
+def _import_async_playwright():
+    """Lazy import patchright's async_playwright to keep it optional."""
     try:
-        import patchright
-        return patchright
+        from patchright.async_api import async_playwright
+        return async_playwright
     except ImportError:
         raise ImportError(
             "patchright is required for Boss直聘 tool. "
