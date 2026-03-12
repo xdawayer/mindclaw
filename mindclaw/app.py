@@ -256,9 +256,17 @@ class MindClawApp:
             try:
                 from mindclaw.tools.bosszp import BossZPSearchTool
 
-                session_path = Path(bosszp_cfg.session_path) if bosszp_cfg.session_path else (
-                    data_dir / "bosszp_session.json"
+                session_path = (
+                    Path(bosszp_cfg.session_path).resolve()
+                    if bosszp_cfg.session_path
+                    else data_dir / "bosszp_session.json"
                 )
+                if not str(session_path).startswith(str(data_dir.resolve())):
+                    logger.warning(
+                        f"BossZP session_path {session_path} is outside data_dir, "
+                        f"falling back to default"
+                    )
+                    session_path = data_dir / "bosszp_session.json"
                 self.tool_registry.register(BossZPSearchTool(
                     session_path=session_path,
                     proxy=bosszp_cfg.proxy,

@@ -285,9 +285,14 @@ def bosszp_login(
     data_dir = Path(cfg.knowledge.data_dir)
 
     bosszp_cfg = cfg.tools.bosszp
-    session_path = Path(bosszp_cfg.session_path) if bosszp_cfg.session_path else (
-        data_dir / "bosszp_session.json"
+    session_path = (
+        Path(bosszp_cfg.session_path).resolve()
+        if bosszp_cfg.session_path
+        else data_dir / "bosszp_session.json"
     )
+    if not str(session_path).startswith(str(data_dir.resolve())):
+        console.print(f"Error: session_path must be inside data_dir ({data_dir})")
+        raise typer.Exit(1)
 
     try:
         from mindclaw.tools.bosszp import _SessionManager

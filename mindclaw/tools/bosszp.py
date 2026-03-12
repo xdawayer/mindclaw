@@ -5,6 +5,7 @@
 
 import asyncio
 import random
+import re
 import time
 from datetime import date
 from pathlib import Path
@@ -39,6 +40,11 @@ _CAPTCHA_SELECTORS = (
     ".nc-container",
     ".slide-verify",
 )
+
+_VALID_EXPERIENCE = {"", "101", "102", "103", "104", "105", "106"}
+_VALID_SALARY = {"", "402", "403", "404", "405", "406", "407"}
+_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_JOB_HREF_RE = re.compile(r"^/job_detail/[A-Za-z0-9_-]+\.html")
 
 CITY_CODES: dict[str, str] = {
     "北京": "101010100",
@@ -272,8 +278,13 @@ def _resolve_city(city: str) -> str:
 
 def _parse_job(raw: dict) -> dict:
     """Parse a single job item from API response."""
+    enc_id = raw.get("encryptJobId", "")
+    job_url = (
+        f"https://www.zhipin.com/job_detail/{enc_id}.html"
+        if _JOB_ID_RE.match(enc_id) else ""
+    )
     return {
-        "job_id": raw.get("encryptJobId", ""),
+        "job_id": enc_id,
         "title": raw.get("jobName", ""),
         "company": raw.get("brandName", ""),
         "company_size": raw.get("brandScaleName", ""),
@@ -287,7 +298,7 @@ def _parse_job(raw: dict) -> dict:
         "hr_name": raw.get("bossName", ""),
         "hr_title": raw.get("bossTitle", ""),
         "hr_online": bool(raw.get("bossOnline")),
-        "job_url": f"https://www.zhipin.com/job_detail/{raw.get('encryptJobId', '')}.html",
+        "job_url": job_url,
     }
 
 
@@ -420,6 +431,11 @@ class BossZPSearchTool(Tool):
 
         experience = params.get("experience", "")
         salary = params.get("salary", "")
+
+        if experience not in _VALID_EXPERIENCE:
+            return f"Error: invalid 'experience' value '{experience}'. Valid: 101-106"
+        if salary not in _VALID_SALARY:
+            return f"Error: invalid 'salary' value '{salary}'. Valid: 402-407"
 
         # Check rate limit
         if not self._limiter.can_proceed():
@@ -573,7 +589,10 @@ class BossZPSearchTool(Tool):
                     for tag_el in tags_els:
                         tags.append(await tag_el.inner_text())
 
-                    job_url = f"https://www.zhipin.com{href}" if href else ""
+                    job_url = (
+                        f"https://www.zhipin.com{href}"
+                        if href and _JOB_HREF_RE.match(href) else ""
+                    )
 
                     jobs.append({
                         "title": title.strip(),
@@ -596,6 +615,7 @@ class BossZPSearchTool(Tool):
                     continue
 
         except Exception as exc:
-            warnings.append(f"DOM parsing error: {exc}")
+            logger.warning(f"DOM parsing error: {exc}")
+            warnings.append("DOM parsing error: see logs for details")
 
         return _format_jobs(jobs, page_num, len(jobs), warnings)
