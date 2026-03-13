@@ -483,8 +483,17 @@ class MindClawApp:
         from mindclaw.channels.feishu import FeishuChannel
 
         feishu_config = self.config.channels.get("feishu")
-        if not feishu_config or not feishu_config.app_id or not feishu_config.app_secret:
-            logger.warning("Feishu channel configured but missing appId or appSecret, skipping")
+        if not feishu_config:
+            logger.warning("Feishu channel configured but no config found, skipping")
+            return
+
+        has_sdk = bool(feishu_config.app_id and feishu_config.app_secret)
+        has_webhook = bool(feishu_config.token and feishu_config.token.startswith("https://"))
+
+        if not has_sdk and not has_webhook:
+            logger.warning(
+                "Feishu channel configured but missing appId+appSecret or webhook URL (token), skipping"
+            )
             return
 
         self.channel_manager.register(
@@ -492,6 +501,7 @@ class MindClawApp:
                 bus=self.bus,
                 app_id=feishu_config.app_id,
                 app_secret=feishu_config.app_secret,
+                webhook_url=feishu_config.token if has_webhook else "",
                 allow_from=feishu_config.allow_from or None,
                 allow_groups=feishu_config.allow_groups,
             )

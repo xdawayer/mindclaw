@@ -13,5 +13,5 @@
 | `discord_channel.py` | 实现 | DiscordChannel — Discord 渠道 (discord.py Bot gateway)，支持 DM/服务器消息过滤 |
 | `slack.py` | 实现 | SlackChannel — Slack 渠道 (Socket Mode WebSocket)，支持 DM/频道消息过滤，发送时自动转换 Markdown → Slack mrkdwn |
 | `slack_format.py` | 工具 | markdown_to_slack() — 标准 Markdown 转 Slack mrkdwn 格式（基于 markdown-to-mrkdwn 库） |
-| `feishu.py` | 实现 | FeishuChannel — 飞书渠道 (lark-oapi WebSocket)，支持单聊/群聊过滤 |
+| `feishu.py` | 实现 | FeishuChannel — 飞书渠道，双模式: SDK模式 (lark-oapi WebSocket 双向) + Webhook模式 (HTTP POST 交互式卡片推送)，支持 lark_md 卡片自动构建/分段/截断 |
 | `wechat_channel.py` | 实现 | WeChatChannel — 微信渠道 (Node.js bridge WebSocket)，支持消息解析、群组过滤、白名单 |
