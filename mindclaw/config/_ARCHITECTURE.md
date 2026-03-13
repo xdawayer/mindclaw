@@ -5,5 +5,5 @@
 | 文件 | 地位 | 功能 |
 |------|------|------|
 | `__init__.py` | 包入口 | 空 |
-| `schema.py` | 核心 | Pydantic 配置模型定义 (AgentConfig 含 max_concurrent_tasks/cron_enabled, ChannelConfig, GatewayConfig, ProviderSettings, ToolsConfig 含 api_call_auth_profiles/api_call_url_allowlist/twitter_cli_path, AuthProfileConfig, LogConfig, SecurityConfig, KnowledgeConfig + ObsidianConfig/NotionConfig/WebArchiveConfig/VectorDbConfig, SkillsConfig, MindClawConfig) |
+| `schema.py` | 核心 | Pydantic 配置模型定义 (AgentConfig 含 max_concurrent_tasks/cron_enabled, ChannelConfig, GatewayConfig, ProviderSettings, ToolsConfig 含 api_call_auth_profiles/api_call_url_allowlist/twitter_cli_path/reddit, AuthProfileConfig, RedditConfig, LogConfig, SecurityConfig, KnowledgeConfig + ObsidianConfig/NotionConfig/WebArchiveConfig/VectorDbConfig, SkillsConfig, MindClawConfig) |
 | `loader.py` | 核心 | JSON 配置文件加载 + 环境变量解析 |

@@ -2,8 +2,8 @@
 # output: 导出 MindClawConfig, AgentConfig, GatewayConfig, ChannelConfig, ProviderSettings,
 #         ToolsConfig, LogConfig, SecurityConfig, KnowledgeConfig,
 #         ObsidianConfig, NotionConfig, WebArchiveConfig, VectorDbConfig, SkillsConfig,
-#         AuthProfileConfig, BossZPConfig
-# pos: 配置层核心，Pydantic 模型 (向量数据库/技能安装/API鉴权/Boss直聘配置)
+#         AuthProfileConfig, BossZPConfig, BossZPTalentConfig, RedditConfig
+# pos: 配置层核心，Pydantic 模型 (向量数据库/技能安装/API鉴权/Boss直聘/Reddit配置)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
 
 from typing import Literal
@@ -82,6 +82,31 @@ class BossZPConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class BossZPTalentConfig(BaseModel):
+    enabled: bool = False
+    session_path: str = Field(default="", alias="sessionPath")
+    proxy: str = ""
+    min_delay: float = Field(default=5.0, alias="minDelay")
+    max_delay: float = Field(default=10.0, alias="maxDelay")
+    daily_cap: int = Field(default=30, alias="dailyCap")
+    page_limit: int = Field(default=3, alias="pageLimit")
+    headless: bool = True
+
+    model_config = {"populate_by_name": True}
+
+
+class RedditConfig(BaseModel):
+    enabled: bool = False
+    client_id: str = Field(default="", alias="clientId")
+    client_secret: str = Field(default="", alias="clientSecret")
+    user_agent: str = Field(
+        default="mindclaw:bot:v1.0 (by /u/mindclaw-bot)", alias="userAgent"
+    )
+    rate_limit: float = Field(default=2.0, alias="rateLimit", gt=0.0)
+
+    model_config = {"populate_by_name": True}
+
+
 class ToolsConfig(BaseModel):
     exec_timeout: int = Field(default=30, alias="execTimeout")
     tool_result_max_chars: int = Field(default=500, alias="toolResultMaxChars")
@@ -95,6 +120,10 @@ class ToolsConfig(BaseModel):
     )
     twitter_cli_path: str = Field(default="", alias="twitterCliPath")
     bosszp: BossZPConfig = Field(default_factory=BossZPConfig, alias="bossZP")
+    bosszp_talent: BossZPTalentConfig = Field(
+        default_factory=BossZPTalentConfig, alias="bossZPTalent"
+    )
+    reddit: RedditConfig = Field(default_factory=RedditConfig, alias="reddit")
 
     model_config = {"populate_by_name": True}
 

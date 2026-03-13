@@ -207,7 +207,12 @@ class _SessionManager:
                 elapsed += _LOGIN_POLL_INTERVAL
 
                 url = page.url
-                if _LOGGED_IN_INDICATOR in url or "/web/geek/" in url:
+                if (
+                    _LOGGED_IN_INDICATOR in url
+                    or "/web/geek/" in url
+                    or "/web/boss/" in url
+                    or "/web/chat/" in url
+                ):
                     # Successfully logged in
                     self._session_path.parent.mkdir(parents=True, exist_ok=True)
                     await context.storage_state(path=str(self._session_path))

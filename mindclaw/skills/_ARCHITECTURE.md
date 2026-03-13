@@ -21,3 +21,4 @@
 | `github-ops.md` | 内置技能 | GitHub 操作 - 通过 exec + gh CLI (on_demand) |
 | `google-workspace.md` | 内置技能 | Google Workspace - 通过 exec + gog CLI (on_demand) |
 | `self-improving.md` | 内置技能 | 自我改进 - 记录错误/纠正/学习 (always) |
+| `skill-vetter.md` | 内置技能 | 技能安全审计 - 安装前代码审查+权限分析+风险评分+go/no-go建议 (on_demand) |

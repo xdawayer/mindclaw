@@ -4,7 +4,7 @@
 #        tools/*, gateway/*, plugins/loader.py, plugins/hooks.py,
 #        skills/installer.py, skills/index_client.py, tools/api_call.py,
 #        tools/web_snapshot.py, tools/twitter_read.py, tools/dashboard_export.py,
-#        tools/bosszp.py
+#        tools/bosszp.py, tools/bosszp_talent.py, tools/reddit.py
 # output: 导出 MindClawApp
 # pos: 顶层编排器，管理组件生命周期和消息路由 (semaphore 并发 + per-session lock)
 # UPDATE: 一旦本文件被更新，务必更新开头注释及所属文件夹的 _ARCHITECTURE.md
@@ -281,6 +281,55 @@ class MindClawApp:
                     "Boss直聘 tool enabled but patchright not installed. "
                     "Install with: pip install patchright && patchright install chromium"
                 )
+
+        # Boss直聘 talent search tool (only if enabled)
+        talent_cfg = self.config.tools.bosszp_talent
+        if talent_cfg.enabled:
+            try:
+                from mindclaw.tools.bosszp_talent import BossZPTalentSearchTool
+
+                talent_session = (
+                    Path(talent_cfg.session_path).resolve()
+                    if talent_cfg.session_path
+                    else (data_dir / "bosszp_session.json").resolve()
+                )
+                if not str(talent_session).startswith(str(data_dir.resolve())):
+                    logger.warning(
+                        f"BossZP talent session_path {talent_session} is outside data_dir, "
+                        f"falling back to default"
+                    )
+                    talent_session = data_dir / "bosszp_session.json"
+                self.tool_registry.register(BossZPTalentSearchTool(
+                    session_path=talent_session,
+                    proxy=talent_cfg.proxy,
+                    min_delay=talent_cfg.min_delay,
+                    max_delay=talent_cfg.max_delay,
+                    daily_cap=talent_cfg.daily_cap,
+                    page_limit=talent_cfg.page_limit,
+                    headless=talent_cfg.headless,
+                ))
+            except ImportError:
+                logger.warning(
+                    "Boss直聘 talent tool enabled but patchright not installed. "
+                    "Install with: pip install patchright && patchright install chromium"
+                )
+
+        # Reddit fetch tool (only if enabled)
+        reddit_cfg = self.config.tools.reddit
+        if reddit_cfg.enabled:
+            from mindclaw.tools.reddit import RedditFetchTool
+
+            self.tool_registry.register(RedditFetchTool(
+                client_id=reddit_cfg.client_id,
+                client_secret=reddit_cfg.client_secret,
+                user_agent=reddit_cfg.user_agent,
+                rate_limit=reddit_cfg.rate_limit,
+            ))
+
+        # RSS/Atom feed fetch tool (always available, SSRF-protected)
+        from mindclaw.tools.rss_fetch import RssFetchTool
+
+        self.tool_registry.register(RssFetchTool())
 
         # Skill tools
         from mindclaw.tools.skill_tools import (

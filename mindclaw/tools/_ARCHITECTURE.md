@@ -21,3 +21,6 @@
 | `twitter_read.py` | 内置工具 | TwitterReadTool (MODERATE) — 通过 CLI 子进程安全读取 X/Twitter (timeline/search/user)，shell 注入防护 |
 | `dashboard_export.py` | 内置工具 | DashboardExportTool (MODERATE) — 生成自包含 HTML 系统仪表盘 (cron 任务状态/执行历史/成功率) |
 | `bosszp.py` | 内置工具 | BossZPSearchTool (MODERATE) — Boss直聘职位搜索 (Patchright 反检测浏览器, XHR拦截+DOM回退, session管理+限流) |
+| `bosszp_talent.py` | 内置工具 | BossZPTalentSearchTool (MODERATE) — Boss直聘招聘端人才搜索 (推荐牛人/搜索人才, 共享session+限流, 更保守的速率限制) |
+| `reddit.py` | 内置工具 | RedditFetchTool (MODERATE) — Reddit 帖子抓取 (OAuth + 降级无Auth模式, 浏览/搜索/评分过滤, rate limiter, max_result_chars=5000) |
+| `rss_fetch.py` | 内置工具 | RssFetchTool (MODERATE) — 通用 RSS/Atom feed 抓取 (RSS 2.0 + Atom 解析, 时间过滤, SSRF 防护, HTML 标签清理, max_result_chars=5000) |
