@@ -1,0 +1,110 @@
+{
+  "cron_9c5f5b02": {
+    "name": "ai_daily_morning_news",
+    "cron_expr": "0 9 * * *",
+    "action": "生成AI日报早间版。\n\n## 采集步骤\n1. web_search \"AI artificial intelligence latest news breakthroughs today\"\n2. web_search \"人工智能 大模型 最新发布 进展\"\n3. web_search \"LLM GPT Claude Gemini new release update\"\n4. reddit_fetch subreddit=MachineLearning sort=hot limit=10\n5. reddit_fetch subreddit=LocalLLaMA sort=hot limit=10\n6. reddit_fetch subreddit=singularity sort=hot limit=10\n7. rss_fetch url=https://plink.anyfeeder.com/weixin/AI_era limit=5 hours=24\n8. rss_fetch url=https://www.qbitai.com/feed limit=5 hours=24\n9. rss_fetch url=https://plink.anyfeeder.com/weixin/qqtech limit=5 hours=24\n\n## 输出格式\n```\n# AI日报 - 早间版\n\n## 🧠 模型与基础设施\n- [来源] 标题 -- 一句话要点\n\n## 🚀 产品与应用\n- [来源] 标题 -- 一句话要点\n\n## 💰 融资与行业\n- [来源] 标题 -- 一句话要点\n\n## 🇨🇳 中文AI圈\n- [新智元/量子位/腾讯科技] 标题 -- 一句话要点\n\n## 💬 Reddit社区热议\n- [r/sub] 标题 (score) -- 核心观点\n\n## 🔥 今日关注\n1-2句总结最重要事件。\n```\n\n每栏目3-5条，总计15-25条，按重要性排序。无内容的栏目省略。",
+    "created_at": "2026-03-12T19:27:18.778132",
+    "last_run": "2026-03-13T09:00:47.755575",
+    "enabled": true,
+    "notify_channel": "feishu",
+    "notify_chat_id": "https://open.feishu.cn/open-apis/bot/v2/hook/e06250d5-75f1-4633-ac84-31b3d09b1c87",
+    "max_iterations": 20,
+    "timeout": 400
+  },
+  "cron_6b205935": {
+    "name": "ai_daily_evening_news",
+    "cron_expr": "0 20 * * *",
+    "action": "生成AI日报晚间版（当日增量追踪）。\n\n## 采集步骤\n1. web_search \"AI news today highlights breakthroughs\"\n2. web_search \"人工智能 今日要闻 重大进展\"\n3. web_search \"AI startup funding product launch today\"\n4. reddit_fetch subreddit=MachineLearning sort=hot limit=10\n5. reddit_fetch subreddit=LocalLLaMA sort=hot limit=10\n6. reddit_fetch subreddit=singularity sort=hot limit=10\n7. rss_fetch url=https://plink.anyfeeder.com/weixin/AI_era limit=5 hours=12\n8. rss_fetch url=https://www.qbitai.com/feed limit=5 hours=12\n9. rss_fetch url=https://plink.anyfeeder.com/weixin/qqtech limit=5 hours=12\n\n## 输出格式\n```\n# AI日报 - 晚间版\n\n## 🔥 今日核心\n最重要的1-2条新闻，每条2-3句展开。\n\n## 📰 更多动态\n- [来源] 标题 -- 要点\n\n## 🇨🇳 中文AI圈\n- [新智元/量子位/腾讯科技] 标题 -- 要点\n\n## 💬 Reddit热议\n- [r/sub] 标题 (score) -- 核心观点\n\n## 📊 数据看板\n今日融资/发布/开源的关键数字。\n\n## 👀 明日关注\n预告明日可能发生的重要事件。\n```\n\n晚间版比早间版更精简，聚焦当日增量。总计10-18条。",
+    "created_at": "2026-03-12T19:27:30.357586",
+    "last_run": "2026-03-13T20:00:51.157911",
+    "enabled": true,
+    "notify_channel": "feishu",
+    "notify_chat_id": "https://open.feishu.cn/open-apis/bot/v2/hook/e06250d5-75f1-4633-ac84-31b3d09b1c87",
+    "max_iterations": 20,
+    "timeout": 400
+  },
+  "cron_c8029594": {
+    "name": "gengrowth_morning_daily",
+    "cron_expr": "0 9 * * *",
+    "action": "生成GenGrowth增长情报早报。\n\n## 采集步骤\n1. web_search \"indie hacker product launch growth strategy today\"\n2. web_search \"独立开发者 产品发布 增长黑客 AI工具\"\n3. web_search \"Product Hunt top launches today\"\n4. web_search \"SaaS AI tool distribution cold start strategy\"\n5. reddit_fetch subreddit=SaaS sort=hot limit=10\n6. reddit_fetch subreddit=Entrepreneur sort=hot limit=10\n7. reddit_fetch subreddit=SEO sort=hot limit=10\n\n## 输出格式\n```\n# GenGrowth情报 - 早报\n\n## 🔍 产品发现\n- [平台] 产品名 -- 做什么 / 增长亮点\n\n## 📈 增长策略\n- [来源] 策略/案例 -- 关键数据\n\n## 📡 行业信号\n- [来源] 趋势/事件 -- 对我们的意义\n\n## 💬 Reddit增长讨论\n- [r/sub] 标题 (score) -- 核心观点\n\n## 🤝 商务线索\n- [类型: 合作/集成/内容] 具体机会\n\n## ✅ 行动建议\n1-2条今日可执行的建议。\n```\n\n每栏目2-4条。聚焦可操作的增长情报，忽略纯技术细节。",
+    "created_at": "2026-03-12T19:27:43.629221",
+    "last_run": "2026-03-13T09:00:47.755575",
+    "enabled": true,
+    "notify_channel": "feishu",
+    "notify_chat_id": "https://open.feishu.cn/open-apis/bot/v2/hook/42a94f0e-1e85-4b03-8786-47a6d65f7620",
+    "max_iterations": 20,
+    "timeout": 400
+  },
+  "cron_5587a209": {
+    "name": "gengrowth_evening_daily",
+    "cron_expr": "0 20 * * *",
+    "action": "生成GenGrowth增长情报晚报（当日增量追踪）。\n\n## 采集步骤\n1. web_search \"indie hacker SaaS launch today highlights\"\n2. web_search \"AI工具 增长策略 社区讨论 今日\"\n3. web_search \"Product Hunt daily top products\"\n4. reddit_fetch subreddit=SaaS sort=hot limit=10\n5. reddit_fetch subreddit=Entrepreneur sort=hot limit=10\n6. reddit_fetch subreddit=SEO sort=hot limit=10\n\n## 输出格式\n```\n# GenGrowth情报 - 晚报\n\n## ⭐ 今日亮点\n最值得关注的1-2个产品/事件，每条2-3句。\n\n## 💬 社区动态\n- [平台] 话题/讨论 -- 核心观点\n\n## 💬 Reddit增长讨论\n- [r/sub] 标题 (score) -- 核心观点\n\n## 📊 数据快照\n今日PH上榜数/HN热帖数/关键融资。\n\n## 👀 明日关注\n预告或跟进建议。\n```\n\n晚报精简版，总计8-12条，聚焦当日增量。",
+    "created_at": "2026-03-12T19:27:56.043238",
+    "last_run": "2026-03-13T20:00:51.157911",
+    "enabled": true,
+    "notify_channel": "feishu",
+    "notify_chat_id": "https://open.feishu.cn/open-apis/bot/v2/hook/42a94f0e-1e85-4b03-8786-47a6d65f7620",
+    "max_iterations": 20,
+    "timeout": 400
+  },
+  "cron_6ad31c58": {
+    "name": "business_leads_extraction",
+    "cron_expr": "30 9 * * *",
+    "action": "提取今日商务线索。\n\n## 采集步骤\n1. web_search \"AI tool partnership collaboration opportunity\"\n2. web_search \"SaaS integration marketplace new launch\"\n3. web_search \"独立开发者 合作 资源互换 工具集成\"\n4. 使用 cron_history 工具查看最近的GenGrowth日报执行记录，提取其中的线索\n5. reddit_fetch subreddit=AlphaAndBetaUsers sort=new limit=15\n6. reddit_fetch subreddit=cofounder sort=new limit=10\n\n## 输出格式\n```\n# 商务线索 - 今日\n\n## 🤝 合作机会\n- [优先级: 高/中] 对象 -- 机会描述 -- 联系渠道\n\n## 🔗 工具集成\n- [产品] 集成价值 -- 可行性评估\n\n## 💬 Reddit线索\n- [r/sub] 帖子 -- 机会描述 -- 链接\n\n## ✍️ 内容共创\n- [对象] 合作形式 -- 预期产出\n\n## ➡️ 下一步\n最值得跟进的1-2条线索和具体行动。\n```\n\n每条标注优先级(高/中/低)。无线索的栏目省略。总计800-1500字。",
+    "created_at": "2026-03-12T19:28:06.421370",
+    "last_run": "2026-03-13T09:30:47.914361",
+    "enabled": true,
+    "notify_channel": "feishu",
+    "notify_chat_id": "https://open.feishu.cn/open-apis/bot/v2/hook/f6614ff5-4356-4cc0-9e1f-9e886a602f4f",
+    "max_iterations": 20,
+    "timeout": 400
+  },
+  "cron_62b0078c": {
+    "name": "weekly_research_report",
+    "cron_expr": "0 21 * * 0",
+    "action": "生成GenGrowth周度研究报告。\n\n## 采集步骤\n1. web_search \"AI industry weekly roundup this week\"\n2. web_search \"indie hacker weekly trends product launches\"\n3. web_search \"SaaS growth strategy weekly analysis\"\n4. 使用 cron_history 工具查看本周的cron执行记录\n5. memory_search \"本周重要事件\"\n\n## 输出格式\n```\n# 周度报告\n\n## 🔥 本周要闻 TOP 5\n1. 事件 -- 影响评估\n2. ...\n\n## 📈 趋势追踪\n- [趋势] 本周变化 -- 信号强度(强/中/弱)\n\n## ⚔️ 竞争格局\n- 主要竞品动态和市场变化\n\n## 💎 机会评估\n- [机会] 可行性 -- 时间窗口 -- 建议动作\n\n## 👀 下周关注\n- 预期事件和跟进计划\n```\n\n周报比日报更深度。总计2000-3000字。",
+    "created_at": "2026-03-12T19:28:16.181589",
+    "last_run": null,
+    "enabled": true,
+    "notify_channel": "feishu",
+    "notify_chat_id": "https://open.feishu.cn/open-apis/bot/v2/hook/3d148178-7177-43b5-bf4e-48b6318f40f9",
+    "max_iterations": 20,
+    "timeout": 600
+  },
+  "cron_730b070a": {
+    "name": "content_assets_archive",
+    "cron_expr": "0 22 * * *",
+    "action": "生成今日内容归档摘要（仅输出文本，不要写入任何文件）。\n\n## 采集步骤\n1. cron_history 查看今日所有cron任务执行记录\n2. web_search \"AI tools indie developer growth today\" 补充今日关键事件\n\n## 输出格式\n# 内容归档\n\n## 📊 产出统计\n- 今日cron任务执行情况概览\n\n## ♻️ 可复用素材\n- [类型] 内容摘要 -- 复用场景\n\n## 💡 关键洞察\n今日最有价值的1-2个发现。\n\n注意：只生成文本摘要输出，不要使用 write_file 或 edit_file 工具。总计800字以内。",
+    "created_at": "2026-03-12T19:28:26.012601",
+    "last_run": "2026-03-12T22:00:14.356441",
+    "enabled": true,
+    "notify_channel": "feishu",
+    "notify_chat_id": "https://open.feishu.cn/open-apis/bot/v2/hook/41533313-dddd-4daa-9fa8-7fa54fa60c25",
+    "max_iterations": 15,
+    "timeout": 300
+  },
+  "cron_reddit_pulse": {
+    "name": "reddit_pulse_daily",
+    "cron_expr": "0 11 * * *",
+    "action": "生成 Reddit Pulse 每日精选。\n\n## 采集步骤\n1. reddit_fetch subreddit=MachineLearning sort=top time_filter=day limit=10\n2. reddit_fetch subreddit=LocalLLaMA sort=top time_filter=day limit=10\n3. reddit_fetch subreddit=ChatGPT sort=top time_filter=day limit=10\n4. reddit_fetch subreddit=singularity sort=top time_filter=day limit=10\n5. reddit_fetch subreddit=SaaS sort=top time_filter=day limit=10\n6. reddit_fetch subreddit=startups sort=top time_filter=day limit=10\n7. reddit_fetch subreddit=SEO sort=top time_filter=day limit=10\n8. reddit_fetch subreddit=Entrepreneur sort=top time_filter=day limit=10\n\n## 输出格式\n```\n# Reddit Pulse - 每日精选\n\n## 🤖 AI & ML\n- [r/sub] 标题 (score/comments) -- 核心观点\n  链接\n\n## 📈 SaaS & Growth\n- [r/sub] 标题 (score/comments) -- 核心观点\n  链接\n\n## 📖 值得深读\n1-2个高质量长文帖的摘要 (selftext > 500字的帖子)\n```\n\n按 score 排序，每个分类5-8条，总计15-20条。优先展示讨论帖(is_self=true)中的核心观点。",
+    "created_at": "2026-03-13T12:00:00.000000",
+    "last_run": null,
+    "enabled": true,
+    "notify_channel": "feishu",
+    "notify_chat_id": "https://open.feishu.cn/open-apis/bot/v2/hook/2185041e-20de-4432-a18e-cf33256ed3ed",
+    "max_iterations": 20,
+    "timeout": 600
+  },
+  "cron_talent_scout": {
+    "name": "talent_scout_daily",
+    "cron_expr": "0 10 * * 1-5",
+    "action": "执行每日候选人搜索推荐任务。\n\n## 步骤\n1. 读取 gengrowth-intelligence/参考资料/招聘JD.json 获取今日应搜索的JD（按星期轮换）\n2. 根据今天是星期几选择2个JD：\n   - 周一: 增长负责人 + CTO技术合伙人\n   - 周二: AI内容运营 + AI SEO增长运营\n   - 周三: 实习生 + 增长负责人\n   - 周四: AI SEO增长运营 + CTO技术合伙人\n   - 周五: AI内容运营 + 实习生\n3. 对每个JD，使用 bosszp_talent_search 工具搜索候选人：\n   - 使用JD中的第一个search_keyword作为query\n   - city=广州\n   - 应用experience/salary/degree过滤器\n   - 搜索page 1（如果结果少于5人，再搜page 2）\n4. 对搜索结果中的候选人进行评分(1-10分)：\n   - 经验匹配度(0-3): 工作年限和领域相关性\n   - 学历(0-2): 学历和学校声誉\n   - 薪资匹配(0-2): 期望薪资在预算范围内\n   - 活跃度(0-1): 近期活跃 = 更高可能性\n   - 状态(0-2): 在职-考虑机会 > 离职 > 在职-不考虑\n5. 选出每个JD的Top 5-10候选人（排除已联系的）\n6. 为每个候选人生成个性化打招呼话术（2-3句中文，基于JD的greeting_template但要个性化）\n7. 格式化为飞书消息并使用 message_user 工具推送（channel=feishu）\n\n## 输出格式\n每个JD一条消息：\n```\n每日招聘报告 - {日期}\n\n岗位: {职位名}\n搜索: {关键词} | 广州 | {经验} | {薪资}\n\n1. {姓名} | 评分: {分数}/10\n   {工作年限} | {学历} | {学校}\n   期望薪资: {薪资} | {地点}\n   状态: {求职状态} | 活跃: {活跃时间}\n   打招呼: \"{个性化话术}\"\n\n(重复每个候选人)\n\n共 {数量} 位候选人 | 下次搜索: {下一个JD}\n```\n\n注意：如果session过期，报告错误并建议运行 mindclaw bosszp-login",
+    "created_at": "2026-03-13T01:15:00.000000",
+    "last_run": "2026-03-13T10:00:48.070775",
+    "enabled": false,
+    "notify_channel": "feishu",
+    "notify_chat_id": "",
+    "max_iterations": 25,
+    "timeout": 600
+  }
+}
