@@ -1,0 +1,99 @@
+name: Upstream Sync Check
+
+on:
+  schedule:
+    - cron: "0 1 * * *"  # 01:00 UTC = 09:00 Asia/Shanghai
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-check:
+    runs-on: ubuntu-latest
+    env:
+      FEISHU_TARGET_OPEN_ID: ou_3ce0dce02872c344a4e244a1837ebced
+      UPSTREAM_REPO: openclaw/openclaw
+    steps:
+      - name: Checkout mindclaw
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream main
+
+      - name: Evaluate diff
+        id: eval
+        run: bash .upstream-sync/evaluate.sh
+
+      - name: Create sync PR
+        id: pr
+        if: steps.eval.outputs.has_updates == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .upstream-sync/create-pr.sh
+
+      - name: Build Feishu message
+        id: msg
+        if: always()
+        run: |
+          if [ "${{ steps.eval.outputs.has_updates }}" != "true" ]; then
+            exit 0  # no notification for no-op days
+          fi
+
+          short="${{ steps.eval.outputs.new_head_short }}"
+          cc="${{ steps.eval.outputs.commit_count }}"
+          cfc="${{ steps.eval.outputs.conflict_count }}"
+          cln="${{ steps.eval.outputs.clean_count }}"
+          status="${{ steps.pr.outputs.merge_status }}"
+          pr_url="${{ steps.pr.outputs.pr_url }}"
+
+          case "$status" in
+            clean)
+              text="✅ MindClaw 上游同步 · ${short}"$'\n'
+              text+="- 新提交: ${cc} 个"$'\n'
+              text+="- 冲突文件: ${cfc} 个"$'\n'
+              text+="- 纯上游文件: ${cln} 个"$'\n'
+              text+="- 状态: 可直接合并"$'\n'
+              text+="- PR: ${pr_url}"
+              ;;
+            conflict)
+              text="⚠️ MindClaw 上游同步 · ${short} · 需要确认"$'\n'
+              text+="- 新提交: ${cc} 个"$'\n'
+              text+="- 冲突文件: ${cfc} 个（双方都动过）"$'\n'
+              text+="- 纯上游文件: ${cln} 个"$'\n'
+              text+="- 状态: 有兼容性冲突，请人工 review"$'\n'
+              text+="- PR: ${pr_url}"
+              ;;
+            existing)
+              text="🔁 MindClaw 上游同步 · ${short}"$'\n'
+              text+="同分支的 PR 已存在，未重复创建"$'\n'
+              text+="PR: ${pr_url:-(无活跃 PR)}"
+              ;;
+            *)
+              text="❌ MindClaw 上游同步 · ${short} · 失败"$'\n'
+              text+="新提交 ${cc} 个，但 PR 未创建；请查看 workflow 日志"
+              ;;
+          esac
+
+          {
+            echo "text<<FEISHU_EOF"
+            printf '%s\n' "$text"
+            echo "FEISHU_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Notify Feishu
+        if: steps.eval.outputs.has_updates == 'true'
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_TEXT: ${{ steps.msg.outputs.text }}
+        run: bash .upstream-sync/notify-feishu.sh
