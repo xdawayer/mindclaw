@@ -24,6 +24,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Prefer SYNC_PAT (fine-grained PAT) so sync branches carrying
+          # upstream `.github/workflows/*.yml` changes can be pushed. The PAT
+          # must have the following repository permissions:
+          #   - Contents: write         (git push)
+          #   - Pull requests: write    (gh pr create)
+          #   - Workflows: write        (push changes under .github/workflows/)
+          # Falls back to GITHUB_TOKEN when the secret is unset (empty string).
+          # NOTE: if SYNC_PAT is set but INVALID/EXPIRED, checkout fails hard
+          # and the job fails — Notify Feishu will not fire. The
+          # "Notify Feishu (job failure catch-all)" step below covers that case.
+          token: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Fetch upstream
         run: |
@@ -38,7 +49,7 @@ jobs:
         id: pr
         if: steps.eval.outputs.has_updates == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
         run: bash .upstream-sync/create-pr.sh
 
       - name: Build Feishu message
@@ -79,8 +90,14 @@ jobs:
               text+="PR: ${pr_url:-(无活跃 PR)}"
               ;;
             *)
+              run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
               text="❌ MindClaw 上游同步 · ${short} · 失败"$'\n'
-              text+="新提交 ${cc} 个，但 PR 未创建；请查看 workflow 日志"
+              text+="- 新提交: ${cc} 个"$'\n'
+              text+="- 冲突文件: ${cfc} 个"$'\n'
+              text+="- 纯上游文件: ${cln} 个"$'\n'
+              text+="- 状态: PR 未创建（常见原因：GITHUB_TOKEN 无 workflows 权限，"
+              text+="请配置 SYNC_PAT secret）"$'\n'
+              text+="- 日志: ${run_url}"
               ;;
           esac
 
@@ -91,9 +108,48 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Notify Feishu
-        if: steps.eval.outputs.has_updates == 'true'
+        # Use always() so that failures in "Create sync PR" still notify —
+        # otherwise the step is implicitly gated by success() and silently skipped.
+        if: always() && steps.eval.outputs.has_updates == 'true'
         env:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_TEXT: ${{ steps.msg.outputs.text }}
         run: bash .upstream-sync/notify-feishu.sh
+
+      # Last-resort catch-all: fires only when the job already failed AND no
+      # Feishu message has been built yet (e.g. Checkout / Fetch / Evaluate
+      # blew up, or SYNC_PAT is invalid). Uses inline curl so it does not
+      # depend on any file that must have been checked out first.
+      - name: Notify Feishu (job failure catch-all)
+        if: failure() && steps.msg.outputs.text == ''
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FEISHU_APP_ID:-}" ] || [ -z "${FEISHU_APP_SECRET:-}" ]; then
+            echo "[catch-all] FEISHU_APP_ID/SECRET not configured; skip"
+            exit 0
+          fi
+          token=$(curl -sS -X POST \
+            "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "{\"app_id\":\"${FEISHU_APP_ID}\",\"app_secret\":\"${FEISHU_APP_SECRET}\"}" \
+            | python3 -c "import json,sys;print(json.load(sys.stdin).get('tenant_access_token',''))")
+          if [ -z "$token" ]; then
+            echo "[catch-all] could not mint tenant_access_token; skip" >&2
+            exit 0
+          fi
+          # Build the JSON payload via python to guarantee correct escaping.
+          # Feishu requires `content` to be a JSON-encoded string (not object).
+          text="❌ MindClaw 上游同步 · workflow 本身失败"$'\n'"请检查日志: ${RUN_URL}"$'\n'"（常见原因：SYNC_PAT 已失效 / checkout 失败 / evaluate 异常）"
+          payload=$(T="$text" RID="${FEISHU_TARGET_OPEN_ID}" \
+            python3 -c 'import json, os; print(json.dumps({"receive_id": os.environ["RID"], "msg_type": "text", "content": json.dumps({"text": os.environ["T"]}, ensure_ascii=False)}))')
+          curl -sS -X POST \
+            "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id" \
+            -H "Authorization: Bearer ${token}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$payload" >/dev/null || true
+          echo "[catch-all] sent"
