@@ -13,6 +13,24 @@ const SLACK_PLAIN_TEXT_MAX = 75;
 
 export type SlackBlock = Block | KnownBlock;
 
+export function buildSlackAgentLabelBlock(agentLabel?: string): SlackBlock[] {
+  const label = normalizeOptionalString(agentLabel);
+  if (!label) {
+    return [];
+  }
+  return [
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: truncateSlackText(`Handled by *${label}*`, SLACK_SECTION_TEXT_MAX),
+        },
+      ],
+    },
+  ];
+}
+
 function buildSlackReplyButtonActionId(buttonIndex: number, choiceIndex: number): string {
   return `${SLACK_REPLY_BUTTON_ACTION_ID}:${String(buttonIndex)}:${String(choiceIndex + 1)}`;
 }
@@ -116,6 +134,7 @@ export function buildSlackSyncReviewBlocks(params: {
   targetScope: string;
   content: string;
   token: string;
+  agentLabel?: string;
 }): SlackBlock[] {
   return [
     {
@@ -136,6 +155,7 @@ export function buildSlackSyncReviewBlocks(params: {
         ),
       },
     },
+    ...buildSlackAgentLabelBlock(params.agentLabel),
     {
       type: "actions",
       elements: [

@@ -125,6 +125,7 @@ function buildSyncReviewPromptResponse(params: {
       targetScope: params.request.target.scope,
       content: params.request.content,
       token: params.token,
+      agentLabel: params.request.approverHint,
     }),
   };
 }
