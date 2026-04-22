@@ -1041,7 +1041,7 @@ Time format in system prompt. Default: `auto` (OS preference).
         fallbacks: ["openrouter/google/gemini-2.0-flash-vision:free"],
       },
       imageGenerationModel: {
-        primary: "openai/gpt-image-1",
+        primary: "openai/gpt-image-2",
         fallbacks: ["google/gemini-3.1-flash-image-preview"],
       },
       videoGenerationModel: {
@@ -1079,7 +1079,7 @@ Time format in system prompt. Default: `auto` (OS preference).
   - Also used as fallback routing when the selected/default model cannot accept image input.
 - `imageGenerationModel`: accepts either a string (`"provider/model"`) or an object (`{ primary, fallbacks }`).
   - Used by the shared image-generation capability and any future tool/plugin surface that generates images.
-  - Typical values: `google/gemini-3.1-flash-image-preview` for native Gemini image generation, `fal/fal-ai/flux/dev` for fal, or `openai/gpt-image-1` for OpenAI Images.
+  - Typical values: `google/gemini-3.1-flash-image-preview` for native Gemini image generation, `fal/fal-ai/flux/dev` for fal, or `openai/gpt-image-2` for OpenAI Images.
   - If you select a provider/model directly, configure the matching provider auth/API key too (for example `GEMINI_API_KEY` or `GOOGLE_API_KEY` for `google/*`, `OPENAI_API_KEY` for `openai/*`, `FAL_KEY` for `fal/*`).
   - If omitted, `image_generate` can still infer an auth-backed provider default. It tries the current default provider first, then the remaining registered image-generation providers in provider-id order.
 - `musicGenerationModel`: accepts either a string (`"provider/model"`) or an object (`{ primary, fallbacks }`).
@@ -1708,6 +1708,64 @@ Run multiple isolated agents inside one Gateway. See [Multi-Agent](/concepts/mul
 Within each tier, the first matching `bindings` entry wins.
 
 For `type: "acp"` entries, OpenClaw resolves by exact conversation identity (`match.channel` + account + `match.peer.id`) and does not use the route binding tier order above.
+
+## Collaboration
+
+Use `collaboration` to layer project spaces, role spaces, Slack user-role mapping, sticky thread ownership policy, and DM-to-shared sync rules on top of the existing `agents`, `bindings`, `channels`, and `cron` surfaces.
+
+```json5
+{
+  collaboration: {
+    identities: {
+      users: {
+        UPM12345: { roles: ["product"] },
+        UOPS1234: { roles: ["ops"] },
+        UCEO1234: { roles: ["ceo"] },
+      },
+    },
+    spaces: {
+      projects: {
+        "proj-a": {
+          channelId: "CPROJ1234",
+          defaultAgent: "product",
+          defaultDmRecipient: "UPM12345",
+          roleDmRecipients: {
+            ops: "UOPS1234",
+            ceo: "UCEO1234",
+          },
+        },
+      },
+      roles: {
+        ops: { channelId: "COPS12345", agentId: "ops" },
+        product: { channelId: "CPROD1234", agentId: "product" },
+        ceo: { channelId: "CCEO12345", agentId: "ceo" },
+      },
+    },
+    routing: {
+      explicitMentionsOverride: true,
+      autoClassifyWhenUnspecified: true,
+      stickyThreadOwner: true,
+      internalConsultationChangesOwner: false,
+    },
+    sync: {
+      dmToShared: {
+        mode: "request-approval",
+        approver: "space-default-agent",
+      },
+    },
+  },
+}
+```
+
+Key fields:
+
+- `collaboration.identities.users`: final Slack user -> OpenClaw role mapping
+- `collaboration.spaces.projects`: project-channel semantics, including default agent and DM recipients
+- `collaboration.spaces.roles`: role-channel semantics
+- `collaboration.routing`: explicit mention override, classifier fallback, and sticky thread owner policy
+- `collaboration.sync.dmToShared`: private DM to shared-space review rules
+
+This layer is intentionally host-agnostic. Slack uses it today, but the semantics are not stored inside `channels.slack.*`.
 
 ### Per-agent access profiles
 

@@ -147,6 +147,16 @@ Failure notifications follow a separate destination path:
 - If neither is set and the job already delivers via `announce`, failure notifications now fall back to that primary announce target.
 - `delivery.failureDestination` is only supported on `sessionTarget="isolated"` jobs unless the primary delivery mode is `webhook`.
 
+### Collaboration-aware Slack defaults
+
+When a cron run is anchored to a Slack project conversation and collaboration spaces are configured, OpenClaw can derive announce targets from that project context:
+
+- success-style notifications default to the project's DM recipient
+- role-specific jobs can use per-role DM recipient overrides
+- failure-style notifications default to the project's Slack channel
+
+Explicit `delivery` and explicit `delivery.failureDestination` still win over these collaboration-derived defaults.
+
 ## CLI examples
 
 One-shot reminder (main session):

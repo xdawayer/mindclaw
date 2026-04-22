@@ -72,6 +72,17 @@ When a binding includes multiple match fields (`peer`, `guildId`, `teamId`, `rol
 
 The matched agent determines which workspace and session store are used.
 
+### Slack collaboration overlay
+
+When the `collaboration` config is enabled for Slack project and role spaces, Slack can add a collaboration-aware routing layer on top of the normal deterministic rules:
+
+- project channels can resolve to a configured default agent
+- role channels can resolve directly to a role agent
+- explicit role mentions such as `@ops` can override the project default
+- Slack thread replies can remain pinned to a previously selected owner agent
+
+This is still deterministic host-side routing. The model does not choose the channel or the owning agent directly.
+
 ## Broadcast groups (run multiple agents)
 
 Broadcast groups let you run **multiple agents** for the same peer **when OpenClaw would normally reply** (for example: in WhatsApp groups, after mention/activation gating).

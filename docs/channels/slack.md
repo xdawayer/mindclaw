@@ -697,6 +697,25 @@ Current Slack message actions include `send`, `upload-file`, `download-file`, `r
 - `channels.slack.thread.initialHistoryLimit` controls how many existing thread messages are fetched when a new thread session starts (default `20`; set `0` to disable).
 - `channels.slack.thread.requireExplicitMention` (default `false`): when `true`, suppress implicit thread mentions so the bot only responds to explicit `@bot` mentions inside threads, even when the bot already participated in the thread. Without this, replies in a bot-participated thread bypass `requireMention` gating.
 
+### Collaboration routing and sticky thread ownership
+
+When the top-level `collaboration` config is present, Slack can act as a team collaboration surface instead of only a raw chat transport.
+
+High-level behavior:
+
+- Slack DMs map to private personal spaces.
+- Project channels map to shared project spaces.
+- Role channels map to shared role spaces such as `ops`, `product`, or `ceo`.
+- Project channels can define a default agent and still allow explicit role handoff with mentions like `@ops`, `@product`, or `@ceo`.
+
+Thread routing behavior:
+
+- a new project-thread reply starts on the project's configured default agent unless an explicit role mention overrides it
+- once a thread is owned by an agent, follow-up replies in that thread stay pinned to the same owner
+- explicit role mentions inside that thread can switch the owner
+
+The visible Slack identity still defaults to one `OpenClaw` app identity. In key flows, OpenClaw can add a small Slack context block such as `Handled by product` without switching to a separate bot account.
+
 Reply threading controls:
 
 - `channels.slack.replyToMode`: `off|first|all|batched` (default `off`)
@@ -840,6 +859,21 @@ Native argument menus use an adaptive rendering strategy that shows a confirmati
 
 Slash sessions use isolated keys like `agent:<agentId>:slack:slash:<userId>` and still route command executions to the target conversation session using `CommandTargetSessionKey`.
 
+### Sync review flow
+
+When collaboration DM-to-shared sync is enabled, Slack can review a pending sync request directly through the existing `/openclaw` slash surface:
+
+```txt
+/openclaw sync-review <token>
+```
+
+OpenClaw replies with an ephemeral Block Kit review card and two actions:
+
+- `Approve sync`
+- `Reject sync`
+
+The review card can also include a small agent label block when the relevant owner is known.
+
 ## Interactive replies
 
 Slack can render agent-authored interactive reply controls, but this feature is disabled by default.
@@ -888,6 +922,7 @@ Notes:
 - This is Slack-specific UI. Other channels do not translate Slack Block Kit directives into their own button systems.
 - The interactive callback values are OpenClaw-generated opaque tokens, not raw agent-authored values.
 - If generated interactive blocks would exceed Slack Block Kit limits, OpenClaw falls back to the original text reply instead of sending an invalid blocks payload.
+- Slack collaboration flows can also use a small context block like `Handled by ops` for key role-specific responses while still keeping one shared `OpenClaw` identity.
 
 ## Exec approvals in Slack
 
