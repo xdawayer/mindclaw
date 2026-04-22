@@ -15,6 +15,8 @@ import {
   type MemorySyncProgressUpdate,
   type ResolvedQmdConfig,
 } from "openclaw/plugin-sdk/memory-core-host-engine-storage";
+import type { ResolvedMemoryCollaborationScope } from "./manager-provider-state.js";
+import { resolveScopedMemoryManagerContext } from "./manager-provider-state.js";
 
 const MEMORY_SEARCH_MANAGER_CACHE_KEY = Symbol.for("openclaw.memorySearchManagerCache");
 type MemorySearchManagerCacheStore = {
@@ -49,11 +51,25 @@ export async function getMemorySearchManager(params: {
   cfg: OpenClawConfig;
   agentId: string;
   purpose?: "default" | "status";
+  collaborationScope?: ResolvedMemoryCollaborationScope;
 }): Promise<MemorySearchManagerResult> {
-  const resolved = resolveMemoryBackendConfig(params);
+  const managerContext = resolveScopedMemoryManagerContext({
+    cfg: params.cfg,
+    agentId: params.agentId,
+    collaborationScope: params.collaborationScope,
+  });
+  const managerAgentId = managerContext.agentId;
+  const resolved = resolveMemoryBackendConfig({
+    ...params,
+    agentId: managerAgentId,
+  });
   if (resolved.backend === "qmd" && resolved.qmd) {
     const statusOnly = params.purpose === "status";
-    const baseCacheKey = buildQmdCacheKey(params.agentId, resolved.qmd);
+    const baseCacheKey = buildQmdCacheKey(
+      managerAgentId,
+      resolved.qmd,
+      params.collaborationScope?.scope,
+    );
     const cacheKey = `${baseCacheKey}:${statusOnly ? "status" : "full"}`;
     const cached = QMD_MANAGER_CACHE.get(cacheKey);
     if (cached) {
@@ -69,7 +85,7 @@ export async function getMemorySearchManager(params: {
       }
     }
 
-    const workspaceDir = resolveAgentWorkspaceDir(params.cfg, params.agentId);
+    const workspaceDir = resolveAgentWorkspaceDir(params.cfg, managerAgentId);
     try {
       await fs.mkdir(workspaceDir, { recursive: true });
     } catch (err) {
@@ -93,9 +109,11 @@ export async function getMemorySearchManager(params: {
         const { QmdMemoryManager } = await import("./qmd-manager.js");
         const primary = await QmdMemoryManager.create({
           cfg: params.cfg,
-          agentId: params.agentId,
+          agentId: managerAgentId,
           resolved,
           mode: statusOnly ? "status" : "full",
+          collaborationScope: params.collaborationScope,
+          collaborationParticipantAgentIds: managerContext.collaborationParticipantAgentIds,
         });
         if (primary) {
           if (statusOnly) {
@@ -106,7 +124,11 @@ export async function getMemorySearchManager(params: {
               primary,
               fallbackFactory: async () => {
                 const { MemoryIndexManager } = await loadManagerRuntime();
-                return await MemoryIndexManager.get(params);
+                return await MemoryIndexManager.get({
+                  ...params,
+                  agentId: managerAgentId,
+                  collaborationParticipantAgentIds: managerContext.collaborationParticipantAgentIds,
+                });
               },
             },
             () => {
@@ -130,10 +152,22 @@ async function getBuiltinMemorySearchManager(params: {
   cfg: OpenClawConfig;
   agentId: string;
   purpose?: "default" | "status";
+  collaborationScope?: ResolvedMemoryCollaborationScope;
+  collaborationParticipantAgentIds?: string[];
 }): Promise<MemorySearchManagerResult> {
   try {
+    const managerContext = resolveScopedMemoryManagerContext({
+      cfg: params.cfg,
+      agentId: params.agentId,
+      collaborationScope: params.collaborationScope,
+    });
     const { MemoryIndexManager } = await loadManagerRuntime();
-    const manager = await MemoryIndexManager.get(params);
+    const manager = await MemoryIndexManager.get({
+      ...params,
+      agentId: managerContext.agentId,
+      collaborationParticipantAgentIds:
+        params.collaborationParticipantAgentIds ?? managerContext.collaborationParticipantAgentIds,
+    });
     return { manager };
   } catch (err) {
     const message = formatErrorMessage(err);
@@ -352,8 +386,12 @@ class FallbackMemoryManager implements MemorySearchManager {
   }
 }
 
-function buildQmdCacheKey(agentId: string, config: ResolvedQmdConfig): string {
+function buildQmdCacheKey(
+  agentId: string,
+  config: ResolvedQmdConfig,
+  collaborationScope?: string,
+): string {
   // ResolvedQmdConfig is assembled in a stable field order in resolveMemoryBackendConfig.
   // Fast stringify avoids deep key-sorting overhead on this hot path.
-  return `${agentId}:${JSON.stringify(config)}`;
+  return `${agentId}:${collaborationScope ?? "-"}:${JSON.stringify(config)}`;
 }

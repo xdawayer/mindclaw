@@ -1374,7 +1374,7 @@ export async function startQaMockOpenAiServer(params?: { host?: string; port?: n
         data: [
           { id: "gpt-5.4", object: "model" },
           { id: "gpt-5.4-alt", object: "model" },
-          { id: "gpt-image-1", object: "model" },
+          { id: "gpt-image-2", object: "model" },
           { id: "text-embedding-3-small", object: "model" },
           { id: "claude-opus-4-6", object: "model" },
           { id: "claude-sonnet-4-6", object: "model" },

@@ -71,6 +71,7 @@ import {
   SLACK_CHANNEL,
   slackConfigAdapter,
 } from "./shared.js";
+export { resolveSlackInboundRoute } from "./inbound-route.js";
 import { parseSlackTarget } from "./target-parsing.js";
 import { buildSlackThreadingToolContext } from "./threading-tool-context.js";
 
@@ -379,10 +380,8 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount, SlackProbe> = crea
     }),
     resolver: {
       resolveTargets: async ({ cfg, accountId, inputs, kind }) => {
-        const toResolvedTarget = <
-          T extends { input: string; resolved: boolean; id?: string; name?: string },
-        >(
-          entry: T,
+        const toResolvedTarget = (
+          entry: { input: string; resolved: boolean; id?: string; name?: string },
           note?: string,
         ) => ({
           input: entry.input,
@@ -444,7 +443,13 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount, SlackProbe> = crea
         return await (await loadSlackProbeModule()).probeSlack(token, timeoutMs);
       },
       formatCapabilitiesProbe: ({ probe }) => {
-        const slackProbe = probe as SlackProbe | undefined;
+        if (!probe || typeof probe !== "object") {
+          return [];
+        }
+        const slackProbe = probe as {
+          bot?: { name?: string };
+          team?: { id?: string; name?: string };
+        };
         const lines = [];
         if (slackProbe?.bot?.name) {
           lines.push({ text: `Bot: @${slackProbe.bot.name}` });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildSlackInteractiveBlocks } from "./blocks-render.js";
+import {
+  buildSlackAgentLabelBlock,
+  buildSlackInteractiveBlocks,
+  buildSlackSyncReviewBlocks,
+} from "./blocks-render.js";
 
 describe("buildSlackInteractiveBlocks", () => {
   it("renders shared interactive blocks in authored order", () => {
@@ -106,5 +110,43 @@ describe("buildSlackInteractiveBlocks", () => {
     expect(buttonBlock.elements?.[1]?.style).toBe("danger");
     expect(buttonBlock.elements?.[2]?.style).toBe("primary");
     expect(buttonBlock.elements?.[3]).not.toHaveProperty("style");
+  });
+
+  it("renders an optional agent label context block", () => {
+    expect(buildSlackAgentLabelBlock("ops")).toEqual([
+      expect.objectContaining({
+        type: "context",
+        elements: [
+          expect.objectContaining({
+            text: "Handled by *ops*",
+          }),
+        ],
+      }),
+    ]);
+    expect(buildSlackAgentLabelBlock("")).toEqual([]);
+  });
+
+  it("includes the agent label in sync review blocks when provided", () => {
+    const blocks = buildSlackSyncReviewBlocks({
+      requestId: "sync_123",
+      targetScope: "project:proj-a",
+      content: "Ship only this excerpt",
+      token: "token-123",
+      agentLabel: "product",
+    });
+
+    expect(blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "header" }),
+        expect.objectContaining({
+          type: "context",
+          elements: [
+            expect.objectContaining({
+              text: "Handled by *product*",
+            }),
+          ],
+        }),
+      ]),
+    );
   });
 });

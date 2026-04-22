@@ -36,8 +36,8 @@ function stubImageGenerationProviders() {
     },
     {
       id: "openai",
-      defaultModel: "gpt-image-1",
-      models: ["gpt-image-1"],
+      defaultModel: "gpt-image-2",
+      models: ["gpt-image-2"],
       capabilities: {
         generate: {
           maxCount: 4,
@@ -257,7 +257,7 @@ describe("createImageGenerateTool", () => {
     vi.stubEnv("OPENAI_API_KEY", "openai-test");
 
     expect(resolveImageGenerationModelConfigForTool({ cfg: {} })).toEqual({
-      primary: "openai/gpt-image-1",
+      primary: "openai/gpt-image-2",
     });
     expect(createImageGenerateTool({ config: {} })).not.toBeNull();
   });
@@ -281,7 +281,7 @@ describe("createImageGenerateTool", () => {
       }),
     ).toEqual({
       primary: "google/gemini-3.1-flash-image-preview",
-      fallbacks: ["openai/gpt-image-1"],
+      fallbacks: ["openai/gpt-image-2"],
     });
   });
 
@@ -289,8 +289,8 @@ describe("createImageGenerateTool", () => {
     vi.spyOn(imageGenerationRuntime, "listRuntimeImageGenerationProviders").mockReturnValue([
       {
         id: "openai",
-        defaultModel: "gpt-image-1",
-        models: ["gpt-image-1"],
+        defaultModel: "gpt-image-2",
+        models: ["gpt-image-2"],
         capabilities: {
           generate: {
             maxCount: 4,
@@ -313,7 +313,7 @@ describe("createImageGenerateTool", () => {
     ]);
     const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
       provider: "openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       attempts: [],
       ignoredOverrides: [],
       images: [
@@ -349,7 +349,7 @@ describe("createImageGenerateTool", () => {
         agents: {
           defaults: {
             imageGenerationModel: {
-              primary: "openai/gpt-image-1",
+              primary: "openai/gpt-image-2",
             },
           },
         },
@@ -364,7 +364,7 @@ describe("createImageGenerateTool", () => {
 
     const result = await tool.execute("call-1", {
       prompt: "A cat wearing sunglasses",
-      model: "openai/gpt-image-1",
+      model: "openai/gpt-image-2",
       filename: "cats/output.png",
       count: 2,
       size: "1024x1024",
@@ -376,14 +376,14 @@ describe("createImageGenerateTool", () => {
           agents: {
             defaults: {
               imageGenerationModel: {
-                primary: "openai/gpt-image-1",
+                primary: "openai/gpt-image-2",
               },
             },
           },
         },
         prompt: "A cat wearing sunglasses",
         agentDir: "/tmp/agent",
-        modelOverride: "openai/gpt-image-1",
+        modelOverride: "openai/gpt-image-2",
         size: "1024x1024",
         count: 2,
         inputImages: [],
@@ -409,12 +409,12 @@ describe("createImageGenerateTool", () => {
       content: [
         {
           type: "text",
-          text: expect.stringContaining("Generated 2 images with openai/gpt-image-1."),
+          text: expect.stringContaining("Generated 2 images with openai/gpt-image-2."),
         },
       ],
       details: {
         provider: "openai",
-        model: "gpt-image-1",
+        model: "gpt-image-2",
         count: 2,
         media: {
           mediaUrls: ["/tmp/generated-1.png", "/tmp/generated-2.png"],
@@ -614,8 +614,8 @@ describe("createImageGenerateTool", () => {
     vi.spyOn(imageGenerationRuntime, "listRuntimeImageGenerationProviders").mockReturnValue([
       {
         id: "openai",
-        defaultModel: "gpt-image-1",
-        models: ["gpt-image-1"],
+        defaultModel: "gpt-image-2",
+        models: ["gpt-image-2"],
         capabilities: {
           generate: {
             maxCount: 4,
@@ -642,7 +642,7 @@ describe("createImageGenerateTool", () => {
     ]);
     const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
       provider: "openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       attempts: [],
       ignoredOverrides: [],
       images: [
@@ -669,7 +669,7 @@ describe("createImageGenerateTool", () => {
       contentType: "image/png",
     });
 
-    const tool = createToolWithPrimaryImageModel("openai/gpt-image-1", {
+    const tool = createToolWithPrimaryImageModel("openai/gpt-image-2", {
       workspaceDir: process.cwd(),
     });
 
@@ -722,8 +722,8 @@ describe("createImageGenerateTool", () => {
     vi.spyOn(imageGenerationRuntime, "listRuntimeImageGenerationProviders").mockReturnValue([
       {
         id: "openai",
-        defaultModel: "gpt-image-1",
-        models: ["gpt-image-1"],
+        defaultModel: "gpt-image-2",
+        models: ["gpt-image-2"],
         capabilities: {
           generate: {
             maxCount: 4,
@@ -750,7 +750,7 @@ describe("createImageGenerateTool", () => {
     ]);
     vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
       provider: "openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       attempts: [],
       ignoredOverrides: [{ key: "aspectRatio", value: "1:1" }],
       images: [
@@ -768,20 +768,20 @@ describe("createImageGenerateTool", () => {
       contentType: "image/png",
     });
 
-    const tool = createToolWithPrimaryImageModel("openai/gpt-image-1");
+    const tool = createToolWithPrimaryImageModel("openai/gpt-image-2");
     const result = await tool.execute("call-openai-generate", {
       prompt: "A lobster at the movies",
       aspectRatio: "1:1",
     });
     const text = (result.content?.[0] as { text: string } | undefined)?.text ?? "";
 
-    expect(text).toContain("Generated 1 image with openai/gpt-image-1.");
+    expect(text).toContain("Generated 1 image with openai/gpt-image-2.");
     expect(text).toContain(
-      "Warning: Ignored unsupported overrides for openai/gpt-image-1: aspectRatio=1:1.",
+      "Warning: Ignored unsupported overrides for openai/gpt-image-2: aspectRatio=1:1.",
     );
     expect(result).toMatchObject({
       details: {
-        warning: "Ignored unsupported overrides for openai/gpt-image-1: aspectRatio=1:1.",
+        warning: "Ignored unsupported overrides for openai/gpt-image-2: aspectRatio=1:1.",
         ignoredOverrides: [{ key: "aspectRatio", value: "1:1" }],
       },
     });

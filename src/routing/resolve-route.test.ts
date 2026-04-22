@@ -242,6 +242,54 @@ describe("resolveAgentRoute", () => {
       },
     },
     {
+      name: "explicit Slack peer bindings win before collaboration defaults",
+      routeParams: {
+        cfg: {
+          agents: {
+            list: [{ id: "main", default: true }, { id: "product" }, { id: "ops" }],
+          },
+          bindings: [
+            {
+              agentId: "main",
+              match: {
+                channel: "slack",
+                accountId: "default",
+                peer: { kind: "channel", id: "CPROJ1234" },
+              },
+            },
+          ],
+          collaboration: {
+            spaces: {
+              projects: {
+                "proj-a": {
+                  channelId: "CPROJ1234",
+                  defaultAgent: "product",
+                  defaultDmRecipient: "UPM12345",
+                },
+              },
+              roles: {
+                ops: {
+                  channelId: "COPS12345",
+                  agentId: "ops",
+                },
+              },
+            },
+            routing: {
+              explicitMentionsOverride: true,
+            },
+          },
+        } satisfies OpenClawConfig,
+        channel: "slack" as const,
+        accountId: "default",
+        peer: { kind: "channel" as const, id: "CPROJ1234" },
+        messageText: "Need @ops on this incident",
+      },
+      expected: {
+        agentId: "main",
+        matchedBy: "binding.peer",
+      },
+    },
+    {
       name: "discord channel peer binding wins over guild binding",
       routeParams: {
         cfg: {

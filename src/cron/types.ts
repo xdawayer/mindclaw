@@ -21,6 +21,11 @@ export type CronMessageChannel = ChannelId;
 
 export type CronDeliveryMode = "none" | "announce" | "webhook";
 
+export type CronCollaborationTarget = {
+  projectChannelId: string;
+  roleId?: string;
+};
+
 export type CronDelivery = {
   mode: CronDeliveryMode;
   channel?: CronMessageChannel;

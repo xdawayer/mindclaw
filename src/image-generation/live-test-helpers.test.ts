@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import {
+  DEFAULT_LIVE_IMAGE_MODELS,
   parseCaseFilter,
   parseCsvFilter,
   parseProviderModelMap,
@@ -10,6 +11,10 @@ import {
 } from "./live-test-helpers.js";
 
 describe("image-generation live-test helpers", () => {
+  it("defaults OpenAI live image coverage to gpt-image-2", () => {
+    expect(DEFAULT_LIVE_IMAGE_MODELS.openai).toBe("openai/gpt-image-2");
+  });
+
   it("parses provider filters and treats empty/all as unfiltered", () => {
     expect(parseCsvFilter()).toBeNull();
     expect(parseCsvFilter("all")).toBeNull();
@@ -26,10 +31,10 @@ describe("image-generation live-test helpers", () => {
 
   it("parses provider model overrides by provider id", () => {
     expect(
-      parseProviderModelMap("openai/gpt-image-1, google/gemini-3.1-flash-image-preview, invalid"),
+      parseProviderModelMap("openai/gpt-image-2, google/gemini-3.1-flash-image-preview, invalid"),
     ).toEqual(
       new Map([
-        ["openai", "openai/gpt-image-1"],
+        ["openai", "openai/gpt-image-2"],
         ["google", "google/gemini-3.1-flash-image-preview"],
       ]),
     );
@@ -40,7 +45,7 @@ describe("image-generation live-test helpers", () => {
       agents: {
         defaults: {
           imageGenerationModel: {
-            primary: "openai/gpt-image-1",
+            primary: "openai/gpt-image-2",
             fallbacks: ["google/gemini-3.1-flash-image-preview", "invalid"],
           },
         },
@@ -49,7 +54,7 @@ describe("image-generation live-test helpers", () => {
 
     expect(resolveConfiguredLiveImageModels(cfg)).toEqual(
       new Map([
-        ["openai", "openai/gpt-image-1"],
+        ["openai", "openai/gpt-image-2"],
         ["google", "google/gemini-3.1-flash-image-preview"],
       ]),
     );

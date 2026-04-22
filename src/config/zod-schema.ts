@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parseByteSize } from "../cli/parse-bytes.js";
 import { parseDurationMs } from "../cli/parse-duration.js";
+import { isValidAgentId } from "../routing/session-key.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeStringifiedOptionalString,
@@ -8,6 +9,7 @@ import {
 import { ToolsSchema } from "./zod-schema.agent-runtime.js";
 import { AgentsSchema, AudioSchema, BindingsSchema, BroadcastSchema } from "./zod-schema.agents.js";
 import { ApprovalsSchema } from "./zod-schema.approvals.js";
+import { CollaborationSchema } from "./zod-schema.collaboration.js";
 import {
   HexColorSchema,
   ModelsConfigSchema,
@@ -511,6 +513,7 @@ export const OpenClawSchema = z
     nodeHost: NodeHostSchema,
     agents: AgentsSchema,
     tools: ToolsSchema,
+    collaboration: CollaborationSchema,
     bindings: BindingsSchema,
     broadcast: BroadcastSchema,
     audio: AudioSchema,
@@ -994,32 +997,64 @@ export const OpenClawSchema = z
   .strict()
   .superRefine((cfg, ctx) => {
     const agents = cfg.agents?.list ?? [];
-    if (agents.length === 0) {
-      return;
-    }
     const agentIds = new Set(agents.map((agent) => agent.id));
 
     const broadcast = cfg.broadcast;
-    if (!broadcast) {
-      return;
+    if (broadcast && agents.length > 0) {
+      for (const [peerId, ids] of Object.entries(broadcast)) {
+        if (peerId === "strategy") {
+          continue;
+        }
+        if (!Array.isArray(ids)) {
+          continue;
+        }
+        for (let idx = 0; idx < ids.length; idx += 1) {
+          const agentId = ids[idx];
+          if (!agentIds.has(agentId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["broadcast", peerId, idx],
+              message: `Unknown agent id "${agentId}" (not in agents.list).`,
+            });
+          }
+        }
+      }
     }
 
-    for (const [peerId, ids] of Object.entries(broadcast)) {
-      if (peerId === "strategy") {
-        continue;
+    const projects = cfg.collaboration?.spaces?.projects ?? {};
+    const roles = cfg.collaboration?.spaces?.roles ?? {};
+
+    for (const [projectId, project] of Object.entries(projects)) {
+      if (!isValidAgentId(project.defaultAgent)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["collaboration", "spaces", "projects", projectId, "defaultAgent"],
+          message: "Invalid agent id",
+        });
       }
-      if (!Array.isArray(ids)) {
-        continue;
+      if (agents.length > 0 && !agentIds.has(project.defaultAgent)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["collaboration", "spaces", "projects", projectId, "defaultAgent"],
+          message: `Unknown agent id "${project.defaultAgent}" (not in agents.list).`,
+        });
       }
-      for (let idx = 0; idx < ids.length; idx += 1) {
-        const agentId = ids[idx];
-        if (!agentIds.has(agentId)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["broadcast", peerId, idx],
-            message: `Unknown agent id "${agentId}" (not in agents.list).`,
-          });
-        }
+    }
+
+    for (const [roleId, role] of Object.entries(roles)) {
+      if (!isValidAgentId(role.agentId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["collaboration", "spaces", "roles", roleId, "agentId"],
+          message: "Invalid agent id",
+        });
+      }
+      if (agents.length > 0 && !agentIds.has(role.agentId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["collaboration", "spaces", "roles", roleId, "agentId"],
+          message: `Unknown agent id "${role.agentId}" (not in agents.list).`,
+        });
       }
     }
   });

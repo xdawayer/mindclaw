@@ -48,6 +48,8 @@ import {
   normalizeLowercaseStringOrEmpty,
 } from "openclaw/plugin-sdk/text-runtime";
 import { asRecord } from "../dreaming-shared.js";
+import type { ResolvedMemoryCollaborationScope } from "./manager-provider-state.js";
+import { listSessionFilesForCollaborationScope } from "./collaboration-session-files.js";
 import { resolveQmdCollectionPatternFlags, type QmdCollectionPatternFlag } from "./qmd-compat.js";
 
 type SqliteDatabase = import("node:sqlite").DatabaseSync;
@@ -234,18 +236,28 @@ export class QmdMemoryManager implements MemorySearchManager {
     agentId: string;
     resolved: ResolvedMemoryBackendConfig;
     mode?: QmdManagerMode;
+    collaborationScope?: ResolvedMemoryCollaborationScope;
+    collaborationParticipantAgentIds?: string[];
   }): Promise<QmdMemoryManager | null> {
     const resolved = params.resolved.qmd;
     if (!resolved) {
       return null;
     }
-    const manager = new QmdMemoryManager({ cfg: params.cfg, agentId: params.agentId, resolved });
+    const manager = new QmdMemoryManager({
+      cfg: params.cfg,
+      agentId: params.agentId,
+      resolved,
+      collaborationScope: params.collaborationScope,
+      collaborationParticipantAgentIds: params.collaborationParticipantAgentIds,
+    });
     await manager.initialize(params.mode ?? "full");
     return manager;
   }
 
   private readonly cfg: OpenClawConfig;
   private readonly agentId: string;
+  private readonly collaborationScope?: ResolvedMemoryCollaborationScope;
+  private readonly collaborationParticipantAgentIds?: string[];
   private readonly qmd: ResolvedQmdConfig;
   private readonly workspaceDir: string;
   private readonly stateDir: string;
@@ -298,9 +310,13 @@ export class QmdMemoryManager implements MemorySearchManager {
     cfg: OpenClawConfig;
     agentId: string;
     resolved: ResolvedQmdConfig;
+    collaborationScope?: ResolvedMemoryCollaborationScope;
+    collaborationParticipantAgentIds?: string[];
   }) {
     this.cfg = params.cfg;
     this.agentId = params.agentId;
+    this.collaborationScope = params.collaborationScope;
+    this.collaborationParticipantAgentIds = params.collaborationParticipantAgentIds;
     this.qmd = params.resolved;
     this.workspaceDir = resolveAgentWorkspaceDir(params.cfg, params.agentId);
     this.stateDir = resolveStateDir(process.env, os.homedir);
@@ -1915,7 +1931,14 @@ export class QmdMemoryManager implements MemorySearchManager {
     }
     const exportDir = this.sessionExporter.dir;
     await fs.mkdir(exportDir, { recursive: true });
-    const files = await listSessionFilesForAgent(this.agentId);
+    const files =
+      this.collaborationScope && this.collaborationParticipantAgentIds?.length
+        ? await listSessionFilesForCollaborationScope({
+            cfg: this.cfg,
+            collaborationScope: this.collaborationScope,
+            candidateAgentIds: this.collaborationParticipantAgentIds,
+          })
+        : await listSessionFilesForAgent(this.agentId);
     const keep = new Set<string>();
     const tracked = new Set<string>();
     const cutoff = this.sessionExporter.retentionMs

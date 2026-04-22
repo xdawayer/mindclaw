@@ -37,6 +37,13 @@ describe("openai image generation provider", () => {
     vi.unstubAllEnvs();
   });
 
+  it("advertises gpt-image-2 as the default OpenAI image model", () => {
+    const provider = buildOpenAIImageGenerationProvider();
+
+    expect(provider.defaultModel).toBe("gpt-image-2");
+    expect(provider.models).toEqual(["gpt-image-2"]);
+  });
+
   it("does not auto-allow local baseUrl overrides for image requests", async () => {
     postJsonRequestMock.mockResolvedValue({
       response: {
@@ -50,7 +57,7 @@ describe("openai image generation provider", () => {
     const provider = buildOpenAIImageGenerationProvider();
     const result = await provider.generateImage({
       provider: "openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       prompt: "Draw a QA lighthouse",
       cfg: {
         models: {
@@ -91,7 +98,7 @@ describe("openai image generation provider", () => {
     const provider = buildOpenAIImageGenerationProvider();
     const result = await provider.generateImage({
       provider: "mock-openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       prompt: "Draw a QA lighthouse",
       cfg: {
         models: {
@@ -133,7 +140,7 @@ describe("openai image generation provider", () => {
     const provider = buildOpenAIImageGenerationProvider();
     const result = await provider.generateImage({
       provider: "openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       prompt: "Draw a QA lighthouse",
       cfg: {
         models: {
@@ -173,7 +180,7 @@ describe("openai image generation provider", () => {
     const provider = buildOpenAIImageGenerationProvider();
     const result = await provider.generateImage({
       provider: "openai",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       prompt: "Change only the background to pale blue",
       cfg: {},
       inputImages: [
@@ -189,7 +196,7 @@ describe("openai image generation provider", () => {
       expect.objectContaining({
         url: "https://api.openai.com/v1/images/edits",
         body: expect.objectContaining({
-          model: "gpt-image-1",
+          model: "gpt-image-2",
           prompt: "Change only the background to pale blue",
           images: [
             {

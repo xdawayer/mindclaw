@@ -39,6 +39,7 @@ import {
 import { MemoryManagerEmbeddingOps } from "./manager-embedding-ops.js";
 import {
   resolveMemoryPrimaryProviderRequest,
+  type ResolvedMemoryCollaborationScope,
   resolveMemoryProviderState,
 } from "./manager-provider-state.js";
 import { resolveMemorySearchPreflight } from "./manager-search-preflight.js";
@@ -80,6 +81,8 @@ export class MemoryIndexManager extends MemoryManagerEmbeddingOps implements Mem
   protected readonly cfg: OpenClawConfig;
   protected readonly agentId: string;
   protected readonly workspaceDir: string;
+  protected readonly collaborationScope?: ResolvedMemoryCollaborationScope;
+  protected readonly collaborationParticipantAgentIds?: string[];
   protected readonly settings: ResolvedMemorySearchConfig;
   protected provider: EmbeddingProvider | null;
   private readonly requestedProvider: EmbeddingProviderRequest;
@@ -156,6 +159,8 @@ export class MemoryIndexManager extends MemoryManagerEmbeddingOps implements Mem
     cfg: OpenClawConfig;
     agentId: string;
     purpose?: "default" | "status";
+    collaborationScope?: ResolvedMemoryCollaborationScope;
+    collaborationParticipantAgentIds?: string[];
   }): Promise<MemoryIndexManager | null> {
     const { cfg, agentId } = params;
     const settings = resolveMemorySearchConfig(cfg, agentId);
@@ -164,7 +169,7 @@ export class MemoryIndexManager extends MemoryManagerEmbeddingOps implements Mem
     }
     const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
     const purpose = params.purpose === "status" ? "status" : "default";
-    const key = `${agentId}:${workspaceDir}:${JSON.stringify(settings)}:${purpose}`;
+    const key = `${agentId}:${workspaceDir}:${params.collaborationScope?.scope ?? "-"}:${JSON.stringify(settings)}:${purpose}`;
     const statusOnly = params.purpose === "status";
     return await getOrCreateManagedCacheEntry({
       cache: INDEX_CACHE,
@@ -177,6 +182,8 @@ export class MemoryIndexManager extends MemoryManagerEmbeddingOps implements Mem
           cfg,
           agentId,
           workspaceDir,
+          collaborationScope: params.collaborationScope,
+          collaborationParticipantAgentIds: params.collaborationParticipantAgentIds,
           settings,
           purpose: params.purpose,
         }),
@@ -188,6 +195,8 @@ export class MemoryIndexManager extends MemoryManagerEmbeddingOps implements Mem
     cfg: OpenClawConfig;
     agentId: string;
     workspaceDir: string;
+    collaborationScope?: ResolvedMemoryCollaborationScope;
+    collaborationParticipantAgentIds?: string[];
     settings: ResolvedMemorySearchConfig;
     providerResult?: EmbeddingProviderResult;
     purpose?: "default" | "status";
@@ -197,6 +206,8 @@ export class MemoryIndexManager extends MemoryManagerEmbeddingOps implements Mem
     this.cfg = params.cfg;
     this.agentId = params.agentId;
     this.workspaceDir = params.workspaceDir;
+    this.collaborationScope = params.collaborationScope;
+    this.collaborationParticipantAgentIds = params.collaborationParticipantAgentIds;
     this.settings = params.settings;
     this.provider = null;
     this.requestedProvider = params.settings.provider;

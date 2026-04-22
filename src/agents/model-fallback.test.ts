@@ -1615,11 +1615,11 @@ describe("runWithImageModelFallback", () => {
       agents: {
         defaults: {
           imageModel: {
-            primary: "openai/gpt-image-1",
+            primary: "openai/gpt-image-2",
             fallbacks: ["google/gemini-2.5-flash-image-preview"],
           },
           models: {
-            "openai/gpt-image-1": {},
+            "openai/gpt-image-2": {},
           },
         },
       },
@@ -1636,7 +1636,7 @@ describe("runWithImageModelFallback", () => {
 
     expect(result.result).toBe("ok");
     expect(run.mock.calls).toEqual([
-      ["openai", "gpt-image-1"],
+      ["openai", "gpt-image-2"],
       ["google", "gemini-2.5-flash-image-preview"],
     ]);
   });

@@ -13,6 +13,12 @@ import type { ReplyPayload } from "openclaw/plugin-sdk/reply-runtime";
 import { danger, logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { chunkItems, normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { ResolvedSlackAccount } from "../accounts.js";
+import {
+  buildSlackSyncReviewBlocks,
+  SLACK_SYNC_REVIEW_APPROVE_ACTION_ID,
+  SLACK_SYNC_REVIEW_REJECT_ACTION_ID,
+  type SlackBlock,
+} from "../blocks-render.js";
 import { truncateSlackText } from "../truncate.js";
 import { resolveSlackAllowListMatch, resolveSlackUserAllowed } from "./allow-list.js";
 import { resolveSlackEffectiveAllowFrom } from "./auth.js";
@@ -30,7 +36,13 @@ import { escapeSlackMrkdwn } from "./mrkdwn.js";
 import { isSlackChannelAllowedByPolicy } from "./policy.js";
 import { resolveSlackRoomContextHints } from "./room-context.js";
 
-type SlackBlock = { type: string; [key: string]: unknown };
+type SlackSyncReviewRequest = {
+  direction: "dm_to_shared";
+  id: string;
+  target: { scope: string };
+  content: string;
+  approverHint?: string;
+};
 
 const SLACK_COMMAND_ARG_ACTION_ID = "openclaw_cmdarg";
 const SLACK_COMMAND_ARG_VALUE_PREFIX = "cmdarg";
@@ -61,6 +73,61 @@ function loadSlashDispatchRuntime() {
 function loadSlashSkillCommandsRuntime() {
   slashSkillCommandsRuntimePromise ??= import("./slash-skill-commands.runtime.js");
   return slashSkillCommandsRuntimePromise;
+}
+
+function decodeSyncReviewToken(raw?: string | null): SlackSyncReviewRequest | null {
+  const token = raw?.trim();
+  if (!token) {
+    return null;
+  }
+  try {
+    const decoded = Buffer.from(token, "base64url").toString("utf8");
+    const parsed = JSON.parse(decoded) as SlackSyncReviewRequest;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      parsed.direction !== "dm_to_shared" ||
+      typeof parsed.id !== "string"
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function resolveSlackSyncReviewAuthorization(params: {
+  cfg: SlackMonitorContext["cfg"];
+  request: SlackSyncReviewRequest;
+  slackUserId: string;
+}): boolean {
+  const configuredApprover = params.cfg.collaboration?.sync?.dmToShared?.approver?.trim();
+  if (
+    configuredApprover &&
+    configuredApprover !== "space-default-agent" &&
+    configuredApprover !== params.slackUserId
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function buildSyncReviewPromptResponse(params: {
+  request: SlackSyncReviewRequest;
+  token: string;
+}): { text: string; response_type: "ephemeral"; blocks: SlackBlock[] } {
+  return {
+    text: "Pending DM-to-shared sync request",
+    response_type: "ephemeral",
+    blocks: buildSlackSyncReviewBlocks({
+      requestId: params.request.id,
+      targetScope: params.request.target.scope,
+      content: params.request.content,
+      token: params.token,
+      agentLabel: params.request.approverHint,
+    }),
+  };
 }
 
 type EncodedMenuChoice = SlackExternalArgMenuChoice;
@@ -318,6 +385,34 @@ export async function registerSlackMonitorSlashCommands(params: {
       await ack();
 
       if (ctx.botUserId && command.user_id === ctx.botUserId) {
+        return;
+      }
+
+      const syncReviewMatch = /^sync-review\s+(.+)$/i.exec(prompt.trim());
+      if (syncReviewMatch?.[1]) {
+        const token = syncReviewMatch[1].trim();
+        const request = decodeSyncReviewToken(token);
+        if (!request) {
+          await respond({
+            text: "Invalid sync review token.",
+            response_type: "ephemeral",
+          });
+          return;
+        }
+        if (
+          !resolveSlackSyncReviewAuthorization({
+            cfg,
+            request,
+            slackUserId: command.user_id,
+          })
+        ) {
+          await respond({
+            text: "You are not authorized to review this sync request.",
+            response_type: "ephemeral",
+          });
+          return;
+        }
+        await respond(buildSyncReviewPromptResponse({ request, token }));
         return;
       }
 
@@ -648,6 +743,74 @@ export async function registerSlackMonitorSlashCommands(params: {
     }
   };
 
+  const handleSyncReviewAction = async (params: {
+    ack: SlackActionMiddlewareArgs["ack"];
+    respond?: SlackActionMiddlewareArgs["respond"];
+    body: SlackActionMiddlewareArgs["body"];
+    value?: string | null;
+    approve: boolean;
+  }) => {
+    await params.ack();
+    const request = decodeSyncReviewToken(params.value);
+    if (!request) {
+      await params.respond?.({
+        text: "Sorry, that sync review token is no longer valid.",
+        response_type: "ephemeral",
+        replace_original: true,
+      });
+      return;
+    }
+
+    const slackUserId = "user" in params.body && params.body.user?.id ? params.body.user.id : "";
+    if (
+      !resolveSlackSyncReviewAuthorization({
+        cfg,
+        request,
+        slackUserId,
+      })
+    ) {
+      await params.respond?.({
+        text: "You are not authorized to review this sync request.",
+        response_type: "ephemeral",
+      });
+      return;
+    }
+
+    if (params.approve) {
+      await params.respond?.({
+        text: `Approved sync request ${request.id}.\nScope: ${request.target.scope}\nContent: ${request.content}`,
+        response_type: "ephemeral",
+        replace_original: true,
+      });
+      return;
+    }
+
+    await params.respond?.({
+      text: `Rejected sync request ${request.id}.`,
+      response_type: "ephemeral",
+      replace_original: true,
+    });
+  };
+
+  const registerSyncReviewAction = (actionId: string, approve: boolean) => {
+    if (typeof (ctx.app as { action?: unknown }).action !== "function") {
+      return;
+    }
+    (
+      ctx.app as unknown as {
+        action: NonNullable<(typeof ctx.app & { action?: unknown })["action"]>;
+      }
+    ).action(actionId, async (args: SlackActionMiddlewareArgs) => {
+      await handleSyncReviewAction({
+        ack: args.ack,
+        respond: args.respond,
+        body: args.body,
+        value: (args.action as { value?: string }).value,
+        approve,
+      });
+    });
+  };
+
   const nativeEnabled = resolveNativeCommandsEnabled({
     providerId: "slack",
     providerSetting: account.config.commands?.native,
@@ -723,6 +886,9 @@ export async function registerSlackMonitorSlashCommands(params: {
   } else {
     logVerbose("slack: slash commands disabled");
   }
+
+  registerSyncReviewAction(SLACK_SYNC_REVIEW_APPROVE_ACTION_ID, true);
+  registerSyncReviewAction(SLACK_SYNC_REVIEW_REJECT_ACTION_ID, false);
 
   if (nativeCommands.length === 0 || !supportsInteractiveArgMenus) {
     return;

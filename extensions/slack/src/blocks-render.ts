@@ -6,10 +6,30 @@ import { truncateSlackText } from "./truncate.js";
 
 export const SLACK_REPLY_BUTTON_ACTION_ID = "openclaw:reply_button";
 export const SLACK_REPLY_SELECT_ACTION_ID = "openclaw:reply_select";
+export const SLACK_SYNC_REVIEW_APPROVE_ACTION_ID = "openclaw_sync_review_approve";
+export const SLACK_SYNC_REVIEW_REJECT_ACTION_ID = "openclaw_sync_review_reject";
 const SLACK_SECTION_TEXT_MAX = 3000;
 const SLACK_PLAIN_TEXT_MAX = 75;
 
 export type SlackBlock = Block | KnownBlock;
+
+export function buildSlackAgentLabelBlock(agentLabel?: string): SlackBlock[] {
+  const label = normalizeOptionalString(agentLabel);
+  if (!label) {
+    return [];
+  }
+  return [
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: truncateSlackText(`Handled by *${label}*`, SLACK_SECTION_TEXT_MAX),
+        },
+      ],
+    },
+  ];
+}
 
 function buildSlackReplyButtonActionId(buttonIndex: number, choiceIndex: number): string {
   return `${SLACK_REPLY_BUTTON_ACTION_ID}:${String(buttonIndex)}:${String(choiceIndex + 1)}`;
@@ -107,4 +127,61 @@ export function buildSlackInteractiveBlocks(interactive?: InteractiveReply): Sla
     });
     return state;
   }).blocks;
+}
+
+export function buildSlackSyncReviewBlocks(params: {
+  requestId: string;
+  targetScope: string;
+  content: string;
+  token: string;
+  agentLabel?: string;
+}): SlackBlock[] {
+  return [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: truncateSlackText("Pending sync review", SLACK_PLAIN_TEXT_MAX),
+        emoji: true,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          `*Pending DM-to-shared sync request*\n*Request:* ${params.requestId}\n*Scope:* ${params.targetScope}\n*Content:* ${params.content}`,
+          SLACK_SECTION_TEXT_MAX,
+        ),
+      },
+    },
+    ...buildSlackAgentLabelBlock(params.agentLabel),
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: SLACK_SYNC_REVIEW_APPROVE_ACTION_ID,
+          text: {
+            type: "plain_text",
+            text: "Approve sync",
+            emoji: true,
+          },
+          value: params.token,
+          style: "primary",
+        },
+        {
+          type: "button",
+          action_id: SLACK_SYNC_REVIEW_REJECT_ACTION_ID,
+          text: {
+            type: "plain_text",
+            text: "Reject sync",
+            emoji: true,
+          },
+          value: params.token,
+          style: "danger",
+        },
+      ],
+    },
+  ];
 }

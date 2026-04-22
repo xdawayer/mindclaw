@@ -81,7 +81,7 @@ describe("image-generation runtime", () => {
       if (providerId === "openai") {
         return {
           id: "openai",
-          defaultModel: "gpt-image-1",
+          defaultModel: "gpt-image-2",
           capabilities: {
             generate: {},
             edit: { enabled: true },
@@ -114,7 +114,7 @@ describe("image-generation runtime", () => {
     mocks.listImageGenerationProviders.mockReturnValue([
       {
         id: "openai",
-        defaultModel: "gpt-image-1",
+        defaultModel: "gpt-image-2",
         capabilities: {
           generate: {},
           edit: { enabled: true },
@@ -144,7 +144,7 @@ describe("image-generation runtime", () => {
     expect(result.attempts).toEqual([
       {
         provider: "openai",
-        model: "gpt-image-1",
+        model: "gpt-image-2",
         error: "OpenAI API key missing",
       },
     ]);
@@ -158,7 +158,7 @@ describe("image-generation runtime", () => {
           resolution?: string;
         }
       | undefined;
-    mocks.resolveAgentModelPrimaryValue.mockReturnValue("openai/gpt-image-1");
+    mocks.resolveAgentModelPrimaryValue.mockReturnValue("openai/gpt-image-2");
     mocks.getImageGenerationProvider.mockReturnValue({
       id: "openai",
       capabilities: {
@@ -193,7 +193,7 @@ describe("image-generation runtime", () => {
       cfg: {
         agents: {
           defaults: {
-            imageGenerationModel: { primary: "openai/gpt-image-1" },
+            imageGenerationModel: { primary: "openai/gpt-image-2" },
           },
         },
       } as OpenClawConfig,

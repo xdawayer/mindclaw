@@ -513,7 +513,7 @@ describe("qa mock openai server", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-image-1",
+        model: "gpt-image-2",
         prompt: "Draw a QA lighthouse",
         n: 1,
         size: "1024x1024",
@@ -528,7 +528,7 @@ describe("qa mock openai server", () => {
     expect(imageRequests.status).toBe(200);
     expect(await imageRequests.json()).toMatchObject([
       {
-        model: "gpt-image-1",
+        model: "gpt-image-2",
         prompt: "Draw a QA lighthouse",
         n: 1,
         size: "1024x1024",

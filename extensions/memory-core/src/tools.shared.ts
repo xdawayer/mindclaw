@@ -3,12 +3,15 @@ import {
   listMemoryCorpusSupplements,
   resolveMemorySearchConfig,
   resolveSessionAgentId,
-  type MemoryCorpusGetResult,
   type MemoryCorpusSearchResult,
   type AnyAgentTool,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/memory-core-host-runtime-core";
 import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
+import {
+  resolveScopedMemoryRuntimeContext,
+  wrapMemorySearchManager,
+} from "./memory/manager-provider-state.js";
 
 type MemoryToolRuntime = typeof import("./tools.runtime.js");
 type MemorySearchManagerResult = Awaited<
@@ -48,6 +51,19 @@ export function resolveMemoryToolContext(options: {
   if (!cfg) {
     return null;
   }
+  const initialAgentId = resolveSessionAgentId({
+    sessionKey: options.agentSessionKey,
+    config: cfg,
+  });
+  const resolved = resolveScopedMemoryRuntimeContext({
+    cfg,
+    agentId: initialAgentId,
+    agentSessionKey: options.agentSessionKey,
+  });
+  if (resolved.agentSessionKey && resolved.agentSessionKey !== options.agentSessionKey) {
+    // Mutate the shared tool options once so later execute closures reuse the scoped session key.
+    options.agentSessionKey = resolved.agentSessionKey;
+  }
   const agentId = resolveSessionAgentId({
     sessionKey: options.agentSessionKey,
     config: cfg,
@@ -61,6 +77,7 @@ export function resolveMemoryToolContext(options: {
 export async function getMemoryManagerContext(params: {
   cfg: OpenClawConfig;
   agentId: string;
+  agentSessionKey?: string;
 }): Promise<
   | {
       manager: NonNullable<MemorySearchManagerResult["manager"]>;
@@ -76,6 +93,7 @@ export async function getMemoryManagerContextWithPurpose(params: {
   cfg: OpenClawConfig;
   agentId: string;
   purpose?: "default" | "status";
+  agentSessionKey?: string;
 }): Promise<
   | {
       manager: NonNullable<MemorySearchManagerResult["manager"]>;
@@ -84,13 +102,26 @@ export async function getMemoryManagerContextWithPurpose(params: {
       error: string | undefined;
     }
 > {
+  const resolved = resolveScopedMemoryRuntimeContext({
+    cfg: params.cfg,
+    agentId: params.agentId,
+    agentSessionKey: params.agentSessionKey,
+  });
   const { getMemorySearchManager } = await loadMemoryToolRuntime();
   const { manager, error } = await getMemorySearchManager({
     cfg: params.cfg,
-    agentId: params.agentId,
+    agentId: resolved.agentId,
     purpose: params.purpose,
   });
-  return manager ? { manager } : { error };
+  return manager
+    ? {
+        manager: wrapMemorySearchManager({
+          manager,
+          fallbackSessionKey: resolved.agentSessionKey,
+          collaborationScope: resolved.collaborationScope,
+        }),
+      }
+    : { error };
 }
 
 export function createMemoryTool(params: {
@@ -103,7 +134,7 @@ export function createMemoryTool(params: {
   description: string;
   parameters: typeof MemorySearchSchema | typeof MemoryGetSchema;
   execute: (ctx: { cfg: OpenClawConfig; agentId: string }) => AnyAgentTool["execute"];
-}): AnyAgentTool | null {
+}) {
   const ctx = resolveMemoryToolContext(params.options);
   if (!ctx) {
     return null;
@@ -175,7 +206,7 @@ export async function getMemoryCorpusSupplementResult(params: {
   lineCount?: number;
   agentSessionKey?: string;
   corpus?: "memory" | "wiki" | "all";
-}): Promise<MemoryCorpusGetResult | null> {
+}) {
   if (params.corpus === "memory") {
     return null;
   }

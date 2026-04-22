@@ -249,7 +249,7 @@ describe("models-config runtime source snapshot", () => {
           ...runtimeConfig,
           agents: {
             defaults: {
-              imageModel: "openai/gpt-image-1",
+              imageModel: "openai/gpt-image-2",
             },
           },
         };

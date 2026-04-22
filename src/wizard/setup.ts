@@ -499,8 +499,9 @@ export async function runSetupWizard(
       workspaceDir,
     });
   }
+  const resolvedAuthChoice = authChoice ?? "skip";
 
-  if (authChoice === "custom-api-key") {
+  if (resolvedAuthChoice === "custom-api-key") {
     const { promptCustomApiConfig } = await import("../commands/onboard-custom.js");
     const customResult = await promptCustomApiConfig({
       prompter,
@@ -509,7 +510,7 @@ export async function runSetupWizard(
       secretInputMode: opts.secretInputMode,
     });
     nextConfig = customResult.config;
-  } else if (authChoice === "skip") {
+  } else if (resolvedAuthChoice === "skip") {
     // Explicit skip should stay cold: do not bootstrap auth/profile machinery
     // or run model/auth checks when the caller already chose to skip setup.
     if (authChoiceFromPrompt) {
@@ -538,7 +539,7 @@ export async function runSetupWizard(
       await import("../commands/auth-choice.js");
     const { applyPrimaryModel, promptDefaultModel } = await import("../commands/model-picker.js");
     const authResult = await applyAuthChoice({
-      authChoice,
+      authChoice: resolvedAuthChoice,
       config: nextConfig,
       prompter,
       runtime,
@@ -554,7 +555,7 @@ export async function runSetupWizard(
     }
 
     const authChoiceModelSelectionPolicy = await resolveAuthChoiceModelSelectionPolicy({
-      authChoice,
+      authChoice: resolvedAuthChoice,
       config: nextConfig,
       workspaceDir,
       resolvePreferredProviderForAuthChoice,

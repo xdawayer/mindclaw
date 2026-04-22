@@ -1,11 +1,22 @@
 import type { CronFailureDestinationConfig } from "../config/types.cron.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
   normalizeOptionalThreadValue,
 } from "../shared/string-coerce.js";
-import type { CronDelivery, CronDeliveryMode, CronJob, CronMessageChannel } from "./types.js";
+import {
+  resolveCronCollaborationDeliveryTarget,
+  resolveCronCollaborationFailureTarget,
+} from "./collaboration-delivery.js";
+import type {
+  CronCollaborationTarget,
+  CronDelivery,
+  CronDeliveryMode,
+  CronJob,
+  CronMessageChannel,
+} from "./types.js";
 
 export type CronDeliveryPlan = {
   mode: CronDeliveryMode;
@@ -18,6 +29,11 @@ export type CronDeliveryPlan = {
   requested: boolean;
 };
 
+export type CronDeliveryResolutionOptions = {
+  cfg?: OpenClawConfig;
+  collaborationTarget?: CronCollaborationTarget;
+};
+
 function normalizeChannel(value: unknown): CronMessageChannel | undefined {
   const trimmed = normalizeOptionalLowercaseString(value);
   if (!trimmed) {
@@ -26,7 +42,10 @@ function normalizeChannel(value: unknown): CronMessageChannel | undefined {
   return trimmed as CronMessageChannel;
 }
 
-export function resolveCronDeliveryPlan(job: CronJob): CronDeliveryPlan {
+export function resolveCronDeliveryPlan(
+  job: CronJob,
+  options?: CronDeliveryResolutionOptions,
+): CronDeliveryPlan {
   const delivery = job.delivery;
   const hasDelivery = delivery && typeof delivery === "object";
   const rawMode = hasDelivery ? (delivery as { mode?: unknown }).mode : undefined;
@@ -65,6 +84,22 @@ export function resolveCronDeliveryPlan(job: CronJob): CronDeliveryPlan {
       accountId: deliveryAccountId,
       source: "delivery",
       requested: resolvedMode === "announce",
+    };
+  }
+
+  const collaborationDelivery = resolveCronCollaborationDeliveryTarget({
+    cfg: options?.cfg,
+    collaborationTarget: options?.collaborationTarget,
+  });
+  if (collaborationDelivery) {
+    return {
+      mode: "announce",
+      channel: collaborationDelivery.channel,
+      to: collaborationDelivery.to,
+      threadId: undefined,
+      accountId: undefined,
+      source: "delivery",
+      requested: true,
     };
   }
 
@@ -110,51 +145,37 @@ function normalizeFailureMode(value: unknown): "announce" | "webhook" | undefine
 export function resolveFailureDestination(
   job: CronJob,
   globalConfig?: CronFailureDestinationConfig,
+  options?: CronDeliveryResolutionOptions,
 ): CronFailureDeliveryPlan | null {
   const delivery = job.delivery;
   const jobFailureDest = delivery?.failureDestination as CronFailureDestinationInput | undefined;
   const hasJobFailureDest = jobFailureDest && typeof jobFailureDest === "object";
 
-  let channel: CronMessageChannel | undefined;
-  let to: string | undefined;
-  let accountId: string | undefined;
-  let mode: "announce" | "webhook" | undefined;
+  const base = {
+    channel: undefined as CronMessageChannel | undefined,
+    to: undefined as string | undefined,
+    accountId: undefined as string | undefined,
+    mode: undefined as "announce" | "webhook" | undefined,
+  };
 
-  if (globalConfig) {
-    channel = normalizeChannel(globalConfig.channel);
-    to = normalizeOptionalString(globalConfig.to);
-    accountId = normalizeOptionalString(globalConfig.accountId);
-    mode = normalizeFailureMode(globalConfig.mode);
+  const collaborationFailureTarget = resolveCronCollaborationFailureTarget({
+    cfg: options?.cfg,
+    collaborationTarget: options?.collaborationTarget,
+  });
+  if (collaborationFailureTarget) {
+    base.channel = collaborationFailureTarget.channel;
+    base.to = collaborationFailureTarget.to;
   }
 
+  applyFailureDestinationLayer(base, globalConfig);
+  if (collaborationFailureTarget) {
+    applyFailureDestinationLayer(base, collaborationFailureTarget);
+  }
   if (hasJobFailureDest) {
-    const jobChannel = normalizeChannel(jobFailureDest.channel);
-    const jobTo = normalizeOptionalString(jobFailureDest.to);
-    const jobAccountId = normalizeOptionalString(jobFailureDest.accountId);
-    const jobMode = normalizeFailureMode(jobFailureDest.mode);
-    const hasJobChannelField = "channel" in jobFailureDest;
-    const hasJobToField = "to" in jobFailureDest;
-    const hasJobAccountIdField = "accountId" in jobFailureDest;
-
-    const jobToExplicitValue = hasJobToField && jobTo !== undefined;
-
-    if (hasJobChannelField) {
-      channel = jobChannel;
-    }
-    if (hasJobToField) {
-      to = jobTo;
-    }
-    if (hasJobAccountIdField) {
-      accountId = jobAccountId;
-    }
-    if (jobMode !== undefined) {
-      const globalMode = globalConfig?.mode ?? "announce";
-      if (!jobToExplicitValue && globalMode !== jobMode) {
-        to = undefined;
-      }
-      mode = jobMode;
-    }
+    applyFailureDestinationLayer(base, jobFailureDest);
   }
+
+  const { channel, to, accountId, mode } = base;
 
   if (!channel && !to && !accountId && !mode) {
     return null;
@@ -177,6 +198,46 @@ export function resolveFailureDestination(
   }
 
   return result;
+}
+
+function applyFailureDestinationLayer(
+  state: {
+    channel?: CronMessageChannel;
+    to?: string;
+    accountId?: string;
+    mode?: "announce" | "webhook";
+  },
+  layer: CronFailureDestinationInput | CronFailureDestinationConfig | undefined,
+): void {
+  if (!layer || typeof layer !== "object") {
+    return;
+  }
+
+  const nextChannel = normalizeChannel(layer.channel);
+  const nextTo = normalizeOptionalString(layer.to);
+  const nextAccountId = normalizeOptionalString(layer.accountId);
+  const nextMode = normalizeFailureMode(layer.mode);
+  const hasChannelField = "channel" in layer;
+  const hasToField = "to" in layer;
+  const hasAccountIdField = "accountId" in layer;
+  const hasExplicitTo = hasToField && nextTo !== undefined;
+
+  if (nextMode !== undefined) {
+    const previousMode = state.mode ?? "announce";
+    if (!hasExplicitTo && previousMode !== nextMode) {
+      state.to = undefined;
+    }
+    state.mode = nextMode;
+  }
+  if (hasChannelField) {
+    state.channel = nextChannel;
+  }
+  if (hasToField) {
+    state.to = nextTo;
+  }
+  if (hasAccountIdField) {
+    state.accountId = nextAccountId;
+  }
 }
 
 function isSameDeliveryTarget(

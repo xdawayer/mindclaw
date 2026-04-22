@@ -132,6 +132,25 @@ openclaw channels status --probe
   </Step>
 </Steps>
 
+## Slack collaboration spaces
+
+Multi-agent routing can also be layered on top of a single Slack workspace when you want one visible `OpenClaw` identity but multiple internal agents such as `ops`, `product`, and `ceo`.
+
+Recommended model:
+
+- Slack DMs -> private personal spaces
+- project channels -> shared project spaces
+- role channels -> shared role spaces
+
+In that setup:
+
+- each role agent still remains a fully isolated OpenClaw agent
+- project channels define a default agent
+- explicit role mentions such as `@ops` can override the default
+- Slack thread ownership can stay pinned to the same agent until an explicit switch happens
+
+This keeps the underlying multi-agent isolation model intact while giving Slack a more collaborative surface.
+
 ## Multiple agents = multiple people, multiple personalities
 
 With **multiple agents**, each `agentId` becomes a **fully isolated persona**:
