@@ -61,6 +61,46 @@ export const FIELD_HELP: Record<string, string> = {
   "update.auto.stableJitterHours":
     "Extra stable-channel rollout spread window in hours (default: 12).",
   "update.auto.betaCheckIntervalHours": "How often beta-channel checks run in hours (default: 1).",
+  collaboration:
+    "Team-collaboration overlay for mapping Slack users into OpenClaw roles, defining project and role spaces, setting routing defaults, and controlling DM-to-shared sync behavior. Use this layer for product semantics instead of overloading raw Slack channel transport config.",
+  "collaboration.identities":
+    "Identity mapping rules that connect Slack users to OpenClaw collaboration roles. Keep this as the final source of truth even if roles are later synchronized from Slack user groups.",
+  "collaboration.identities.users":
+    "Slack user to role mapping keyed by Slack user ID. Use this to declare who is ops, product, ceo, or other future collaboration roles.",
+  "collaboration.spaces":
+    "Logical collaboration spaces layered above raw Slack channels. Use projects for primary shared work surfaces and roles for cross-project viewpoints.",
+  "collaboration.spaces.projects":
+    "Project-space definitions keyed by project id. Each project links a Slack channel to a default agent, a default DM recipient, and optional per-role DM recipient overrides.",
+  "collaboration.spaces.projects.*.channelId":
+    "Slack channel ID for the project's shared work surface. Use a real public or private Slack channel ID such as C123... or G123....",
+  "collaboration.spaces.projects.*.defaultAgent":
+    "Default OpenClaw agent that owns new unspecified messages in this project space before any explicit role mention or high-confidence classifier transfer.",
+  "collaboration.spaces.projects.*.defaultDmRecipient":
+    "Slack user ID that receives default DM-routed notifications for this project when no per-role DM override applies.",
+  "collaboration.spaces.projects.*.roleDmRecipients":
+    "Optional per-role Slack DM recipient overrides for project notifications. Use this when ops, product, and ceo messages should go to different people.",
+  "collaboration.spaces.roles":
+    "Role-space definitions keyed by role id such as ops, product, or ceo. Use these for cross-project channels that route directly to a single role agent.",
+  "collaboration.spaces.roles.*.channelId": "Slack channel ID for the role-space channel.",
+  "collaboration.spaces.roles.*.agentId": "OpenClaw agent that owns this role-space channel.",
+  "collaboration.routing":
+    "Collaboration routing policy flags controlling explicit role-mention overrides, unspecified-message classification, sticky thread ownership, and whether internal consultations can change owner.",
+  "collaboration.routing.explicitMentionsOverride":
+    "When true, explicit role mentions such as @ops or @ceo always override the project default route.",
+  "collaboration.routing.autoClassifyWhenUnspecified":
+    "When true, unspecified project-channel messages may be re-routed away from the default agent by the intent classifier when confidence is high enough.",
+  "collaboration.routing.stickyThreadOwner":
+    "When true, once a project thread is assigned to an agent, follow-up messages in that thread stay with the same owner until explicit mention or handoff changes it.",
+  "collaboration.routing.internalConsultationChangesOwner":
+    "When true, internal agent-to-agent consultation may transfer thread ownership automatically. Keep this false for clearer ownership semantics.",
+  "collaboration.sync":
+    "Policies for moving content between private and shared collaboration domains.",
+  "collaboration.sync.dmToShared":
+    "Rules for syncing content from private DM space into a project or role shared space.",
+  "collaboration.sync.dmToShared.mode":
+    'Sync mode for DM to shared-space transfer. "request-approval" means the user can request sync, but entry into shared memory still needs approval.',
+  "collaboration.sync.dmToShared.approver":
+    'Approval target for DM-to-shared sync requests. Use "space-default-agent" to route approval to the relevant project or role default owner, or provide a concrete Slack user ID.',
   gateway:
     "Gateway runtime surface for bind mode, auth, control UI, remote transport, and operational safety controls. Keep conservative defaults unless you intentionally expose the gateway beyond trusted local interfaces.",
   "gateway.port":
