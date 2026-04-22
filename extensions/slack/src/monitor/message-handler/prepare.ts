@@ -18,7 +18,11 @@ import {
   recordPendingHistoryEntryIfEnabled,
 } from "openclaw/plugin-sdk/reply-history";
 import type { FinalizedMsgContext } from "openclaw/plugin-sdk/reply-runtime";
-import { resolveThreadSessionKeys } from "openclaw/plugin-sdk/routing";
+import {
+  buildAgentSessionKey,
+  deriveLastRoutePolicy,
+  resolveThreadSessionKeys,
+} from "openclaw/plugin-sdk/routing";
 import { logVerbose, shouldLogVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { resolvePinnedMainDmOwnerFromAllowlist } from "openclaw/plugin-sdk/security-runtime";
 import {
@@ -29,6 +33,7 @@ import { resolveSlackReplyToMode, type ResolvedSlackAccount } from "../../accoun
 import { reactSlackMessage } from "../../actions.js";
 import { resolveSlackInboundRoute } from "../../channel.js";
 import { hasSlackThreadParticipation } from "../../sent-thread-cache.js";
+import { resolveSlackThreadOwnedRoute } from "../../thread-ownership.js";
 import { resolveSlackThreadContext } from "../../threading.js";
 import type { SlackMessageEvent } from "../../types.js";
 import {
@@ -267,7 +272,7 @@ function resolveSlackRoutingContext(params: {
   isRoomish: boolean;
 }): SlackRoutingContext {
   const { ctx, account, message, isDirectMessage, isGroupDm, isRoom, isRoomish } = params;
-  const route = resolveSlackInboundRoute({
+  const baseRoute = resolveSlackInboundRoute({
     cfg: ctx.cfg,
     accountId: account.accountId,
     teamId: ctx.teamId || undefined,
@@ -296,6 +301,56 @@ function resolveSlackRoutingContext(params: {
   // Before this fix, every channel message used its own ts as threadId, creating
   // isolated sessions per message (regression from #10686).
   const roomThreadId = isThreadReply && threadTs ? threadTs : undefined;
+  const peer = {
+    kind: isDirectMessage
+      ? ("direct" as const)
+      : isRoom
+        ? ("channel" as const)
+        : ("group" as const),
+    id: isDirectMessage ? (message.user ?? "unknown") : message.channel,
+  };
+  const { route } = resolveSlackThreadOwnedRoute({
+    route: baseRoute,
+    isThreadReply: Boolean(roomThreadId),
+    accountId: account.accountId,
+    channelId: message.channel,
+    threadTs: roomThreadId,
+    buildRouteForAgent: (agentId, matchedBy) => {
+      const next = resolveSlackInboundRoute({
+        cfg: ctx.cfg,
+        accountId: account.accountId,
+        teamId: ctx.teamId || undefined,
+        peer,
+        messageText: message.text ?? undefined,
+      });
+      const mainSessionKey = buildAgentSessionKey({
+        agentId,
+        channel: "slack",
+        accountId: account.accountId,
+        peer: {
+          kind: "direct",
+          id: message.user ?? "unknown",
+        },
+      });
+      const sessionKey = buildAgentSessionKey({
+        agentId,
+        channel: "slack",
+        accountId: account.accountId,
+        peer,
+      });
+      return {
+        ...next,
+        agentId,
+        sessionKey,
+        mainSessionKey,
+        lastRoutePolicy: deriveLastRoutePolicy({
+          sessionKey,
+          mainSessionKey,
+        }),
+        matchedBy,
+      };
+    },
+  });
   const canonicalThreadId = isRoomish ? roomThreadId : isThreadReply ? threadTs : autoThreadId;
   const threadKeys = resolveThreadSessionKeys({
     baseSessionKey: route.sessionKey,

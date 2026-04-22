@@ -55,6 +55,7 @@ export type ResolvedAgentRoute = {
     | "collaboration.project.default"
     | "collaboration.project.mention"
     | "collaboration.role"
+    | "collaboration.thread.owner"
     | "binding.peer"
     | "binding.peer.parent"
     | "binding.peer.wildcard"
