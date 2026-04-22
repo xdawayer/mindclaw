@@ -248,7 +248,7 @@ describe("config cli", () => {
           defaults: {
             model: "openai/gpt-5.4",
             imageGenerationModel: {
-              primary: "openai/gpt-image-1",
+              primary: "openai/gpt-image-2",
             },
           },
         },
@@ -266,7 +266,7 @@ describe("config cli", () => {
       const written = mockWriteConfigFile.mock.calls[0]?.[0];
       expect(written.agents?.defaults?.model).toBe("openai/gpt-5.4");
       expect(written.agents?.defaults?.imageGenerationModel).toEqual({
-        primary: "openai/gpt-image-1",
+        primary: "openai/gpt-image-2",
       });
       expect(written.agents?.defaults?.videoGenerationModel).toEqual({
         primary: "qwen/wan2.6-t2v",

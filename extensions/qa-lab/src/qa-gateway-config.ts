@@ -118,8 +118,8 @@ export function buildQaGatewayConfig(params: {
         maxTokens: 4096,
       },
       {
-        id: "gpt-image-1",
-        name: "gpt-image-1",
+        id: "gpt-image-2",
+        name: "gpt-image-2",
         api: "openai-responses",
         reasoning: false,
         input: ["text"],
@@ -189,9 +189,9 @@ export function buildQaGatewayConfig(params: {
     params.imageGenerationModel !== undefined
       ? params.imageGenerationModel
       : providerMode === "mock-openai"
-        ? "mock-openai/gpt-image-1"
+        ? "mock-openai/gpt-image-2"
         : modelProviderIds.includes("openai")
-          ? "openai/gpt-image-1"
+          ? "openai/gpt-image-2"
           : null;
   const selectedProviderIds =
     providerMode === "live-frontier"

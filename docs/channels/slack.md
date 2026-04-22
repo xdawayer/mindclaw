@@ -53,8 +53,8 @@ Status: production-ready for DMs + channels via Slack app integrations. Default 
         Env fallback (default account only):
 
 ```bash
-SLACK_APP_TOKEN=xapp-...
-SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-1-A0B00CDL5UG-10968772011493-a524831be4ca19106e061639f1cc462660b58c853b3aafaee6fbcc43be226a65
+SLACK_BOT_TOKEN=xoxb-10657735687841-10956721235559-tA5EviTK7R4UEYignPIcBltG
 ```
 
       </Step>

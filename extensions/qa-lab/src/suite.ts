@@ -1162,7 +1162,7 @@ async function runAgentPrompt(
 }
 
 async function ensureImageGenerationConfigured(env: QaSuiteEnvironment) {
-  const imageModelRef = "openai/gpt-image-1";
+  const imageModelRef = "openai/gpt-image-2";
   await patchConfig({
     env,
     patch:
@@ -1184,8 +1184,8 @@ async function ensureImageGenerationConfigured(env: QaSuiteEnvironment) {
                   api: "openai-responses",
                   models: [
                     {
-                      id: "gpt-image-1",
-                      name: "gpt-image-1",
+                      id: "gpt-image-2",
+                      name: "gpt-image-2",
                       api: "openai-responses",
                       reasoning: false,
                       input: ["text"],

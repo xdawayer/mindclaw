@@ -51,7 +51,7 @@ describe("media-generation runtime shared candidates", () => {
         },
         {
           id: "openai",
-          defaultModel: "gpt-image-1",
+          defaultModel: "gpt-image-2",
           isConfigured: () => true,
         },
         {
@@ -65,7 +65,7 @@ describe("media-generation runtime shared candidates", () => {
     expect(candidates).toEqual([
       { provider: "google", model: "gemini-3.1-flash-image-preview" },
       { provider: "fal", model: "fal-ai/flux/dev" },
-      { provider: "openai", model: "gpt-image-1" },
+      { provider: "openai", model: "gpt-image-2" },
       { provider: "minimax", model: "image-01" },
     ]);
   });
@@ -78,7 +78,7 @@ describe("media-generation runtime shared candidates", () => {
       listProviders: () => [
         {
           id: "openai",
-          defaultModel: "gpt-image-1",
+          defaultModel: "gpt-image-2",
           isConfigured: () => true,
         },
         {
@@ -90,7 +90,7 @@ describe("media-generation runtime shared candidates", () => {
     });
 
     expect(candidates).toEqual([
-      { provider: "openai", model: "gpt-image-1" },
+      { provider: "openai", model: "gpt-image-2" },
       { provider: "fal", model: "fal-ai/flux/dev" },
     ]);
   });
@@ -111,7 +111,7 @@ describe("media-generation runtime shared candidates", () => {
       listProviders: () => [
         {
           id: "openai",
-          defaultModel: "gpt-image-1",
+          defaultModel: "gpt-image-2",
           isConfigured: () => true,
         },
       ],
