@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveCronDeliveryPlan, resolveFailureDestination } from "./delivery-plan.js";
 import type { CronJob } from "./types.js";
 
@@ -18,6 +19,23 @@ function makeJob(overrides: Partial<CronJob>): CronJob {
     ...overrides,
   };
 }
+
+const collaborationConfig: OpenClawConfig = {
+  collaboration: {
+    spaces: {
+      projects: {
+        alpha: {
+          channelId: "CPROJ1234",
+          defaultAgent: "product",
+          defaultDmRecipient: "UPM12345",
+          roleDmRecipients: {
+            ops: "UOPS1234",
+          },
+        },
+      },
+    },
+  },
+};
 
 describe("resolveCronDeliveryPlan", () => {
   it("defaults to announce when delivery object has no mode", () => {
@@ -102,6 +120,50 @@ describe("resolveCronDeliveryPlan", () => {
     expect(plan.channel).toBe("telegram");
     expect(plan.to).toBe("-1001234567890");
     expect(plan.threadId).toBe("99");
+  });
+
+  it("uses collaboration defaults when job delivery is not explicitly configured", () => {
+    const plan = resolveCronDeliveryPlan(
+      makeJob({
+        delivery: undefined,
+      }),
+      {
+        cfg: collaborationConfig,
+        collaborationTarget: {
+          projectChannelId: "CPROJ1234",
+          roleId: "ops",
+        },
+      },
+    );
+
+    expect(plan.mode).toBe("announce");
+    expect(plan.requested).toBe(true);
+    expect(plan.channel).toBe("slack");
+    expect(plan.to).toBe("user:UOPS1234");
+  });
+
+  it("keeps explicit job delivery ahead of collaboration defaults", () => {
+    const plan = resolveCronDeliveryPlan(
+      makeJob({
+        delivery: {
+          mode: "announce",
+          channel: "telegram",
+          to: "123",
+        },
+      }),
+      {
+        cfg: collaborationConfig,
+        collaborationTarget: {
+          projectChannelId: "CPROJ1234",
+          roleId: "ops",
+        },
+      },
+    );
+
+    expect(plan.mode).toBe("announce");
+    expect(plan.requested).toBe(true);
+    expect(plan.channel).toBe("telegram");
+    expect(plan.to).toBe("123");
   });
 });
 
@@ -233,6 +295,65 @@ describe("resolveFailureDestination", () => {
       mode: "announce",
       channel: "last",
       to: undefined,
+      accountId: undefined,
+    });
+  });
+
+  it("uses collaboration defaults when no explicit failure destination is configured", () => {
+    const plan = resolveFailureDestination(
+      makeJob({
+        delivery: {
+          mode: "announce",
+          channel: "slack",
+          to: "user:UOPS1234",
+        },
+      }),
+      undefined,
+      {
+        cfg: collaborationConfig,
+        collaborationTarget: {
+          projectChannelId: "CPROJ1234",
+          roleId: "ops",
+        },
+      },
+    );
+
+    expect(plan).toEqual({
+      mode: "announce",
+      channel: "slack",
+      to: "channel:CPROJ1234",
+      accountId: undefined,
+    });
+  });
+
+  it("keeps explicit job failure destinations ahead of collaboration defaults", () => {
+    const plan = resolveFailureDestination(
+      makeJob({
+        delivery: {
+          mode: "announce",
+          channel: "slack",
+          to: "user:UOPS1234",
+          failureDestination: {
+            mode: "announce",
+            channel: "signal",
+            to: "ops-room",
+          },
+        },
+      }),
+      undefined,
+      {
+        cfg: collaborationConfig,
+        collaborationTarget: {
+          projectChannelId: "CPROJ1234",
+          roleId: "ops",
+        },
+      },
+    );
+
+    expect(plan).toEqual({
+      mode: "announce",
+      channel: "signal",
+      to: "ops-room",
       accountId: undefined,
     });
   });
