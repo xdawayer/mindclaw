@@ -1,6 +1,7 @@
 import { resolveProjectDmRecipient } from "../collaboration/slack-targets.js";
 import { resolveProjectSpaceBySlackChannelId } from "../collaboration/spaces.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { parseAgentSessionKey } from "../routing/session-key.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import type { CronCollaborationTarget, CronMessageChannel } from "./types.js";
 
@@ -18,6 +19,42 @@ function resolveCronCollaborationProject(params: {
     return null;
   }
   return resolveProjectSpaceBySlackChannelId(params.cfg, projectChannelId);
+}
+
+export function resolveCronCollaborationTarget(params: {
+  cfg: OpenClawConfig | undefined;
+  agentId?: string;
+  sessionKey?: string;
+}): CronCollaborationTarget | null {
+  const parsed = parseAgentSessionKey(params.sessionKey);
+  const rest = parsed?.rest?.trim();
+  if (!rest) {
+    return null;
+  }
+
+  const parts = rest.split(":");
+  if (parts[0] !== "slack" || (parts[1] !== "channel" && parts[1] !== "group")) {
+    return null;
+  }
+
+  const projectChannelId = parts[2]?.trim();
+  if (!projectChannelId) {
+    return null;
+  }
+
+  let roleId: string | undefined;
+  const roles = params.cfg?.collaboration?.spaces?.roles ?? {};
+  for (const [candidateRoleId, role] of Object.entries(roles)) {
+    if (role.agentId === params.agentId) {
+      roleId = candidateRoleId;
+      break;
+    }
+  }
+
+  return {
+    projectChannelId,
+    ...(roleId ? { roleId } : {}),
+  };
 }
 
 function toSlackUserTarget(userId: string): string | null {

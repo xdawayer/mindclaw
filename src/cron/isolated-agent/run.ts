@@ -4,6 +4,7 @@ import type { ThinkLevel } from "../../auto-reply/thinking.js";
 import type { CliDeps } from "../../cli/outbound-send-deps.js";
 import type { AgentDefaultsConfig } from "../../config/types.agent-defaults.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { resolveCronCollaborationTarget } from "../collaboration-delivery.js";
 import { resolveCronDeliveryPlan } from "../delivery-plan.js";
 import type { CronJob, CronRunTelemetry } from "../types.js";
 import {
@@ -130,7 +131,15 @@ async function resolveCronDeliveryContext(params: {
   agentId: string;
   deliveryContract: IsolatedDeliveryContract;
 }) {
-  const deliveryPlan = resolveCronDeliveryPlan(params.job);
+  const collaborationTarget = resolveCronCollaborationTarget({
+    cfg: params.cfg,
+    agentId: params.agentId,
+    sessionKey: params.job.sessionKey,
+  });
+  const deliveryPlan = resolveCronDeliveryPlan(params.job, {
+    cfg: params.cfg,
+    collaborationTarget: collaborationTarget ?? undefined,
+  });
   if (!deliveryPlan.requested) {
     const resolvedDelivery = {
       ok: false as const,
