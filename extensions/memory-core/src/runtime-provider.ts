@@ -1,17 +1,45 @@
 import type { MemoryPluginRuntime } from "openclaw/plugin-sdk/memory-core-host-runtime-core";
 import { resolveMemoryBackendConfig } from "openclaw/plugin-sdk/memory-core-host-runtime-files";
 import { closeAllMemorySearchManagers, getMemorySearchManager } from "./memory/index.js";
+import {
+  resolveScopedMemoryRuntimeContext,
+  wrapMemorySearchManager,
+} from "./memory/manager-provider-state.js";
 
 export const memoryRuntime: MemoryPluginRuntime = {
   async getMemorySearchManager(params) {
-    const { manager, error } = await getMemorySearchManager(params);
+    const resolved = resolveScopedMemoryRuntimeContext({
+      cfg: params.cfg,
+      // Keep backend selection agent-scoped even when collaboration memory narrows the session scope.
+      agentId: params.agentId,
+      agentSessionKey: params.agentSessionKey,
+    });
+    const { manager, error } = await getMemorySearchManager({
+      cfg: params.cfg,
+      agentId: resolved.agentId,
+      purpose: params.purpose,
+    });
     return {
-      manager,
+      manager: manager
+        ? wrapMemorySearchManager({
+            manager,
+            fallbackSessionKey: resolved.agentSessionKey,
+            collaborationScope: resolved.collaborationScope,
+          })
+        : null,
       error,
     };
   },
   resolveMemoryBackendConfig(params) {
-    return resolveMemoryBackendConfig(params);
+    const resolved = resolveScopedMemoryRuntimeContext({
+      cfg: params.cfg,
+      agentId: params.agentId,
+      agentSessionKey: params.agentSessionKey,
+    });
+    return resolveMemoryBackendConfig({
+      cfg: params.cfg,
+      agentId: resolved.agentId,
+    });
   },
   async closeAllMemorySearchManagers() {
     await closeAllMemorySearchManagers();

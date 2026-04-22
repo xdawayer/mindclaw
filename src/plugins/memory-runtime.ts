@@ -21,6 +21,7 @@ export async function getActiveMemorySearchManager(params: {
   cfg: OpenClawConfig;
   agentId: string;
   purpose?: "default" | "status";
+  agentSessionKey?: string;
 }) {
   const runtime = ensureMemoryRuntime(params.cfg);
   if (!runtime) {
@@ -29,7 +30,11 @@ export async function getActiveMemorySearchManager(params: {
   return await runtime.getMemorySearchManager(params);
 }
 
-export function resolveActiveMemoryBackendConfig(params: { cfg: OpenClawConfig; agentId: string }) {
+export function resolveActiveMemoryBackendConfig(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  agentSessionKey?: string;
+}) {
   return ensureMemoryRuntime(params.cfg)?.resolveMemoryBackendConfig(params) ?? null;
 }
 

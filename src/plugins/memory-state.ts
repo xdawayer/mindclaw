@@ -98,6 +98,7 @@ export type MemoryPluginRuntime = {
     cfg: OpenClawConfig;
     agentId: string;
     purpose?: "default" | "status";
+    agentSessionKey?: string;
   }): Promise<{
     manager: RegisteredMemorySearchManager | null;
     error?: string;
@@ -105,6 +106,7 @@ export type MemoryPluginRuntime = {
   resolveMemoryBackendConfig(params: {
     cfg: OpenClawConfig;
     agentId: string;
+    agentSessionKey?: string;
   }): MemoryRuntimeBackendConfig;
   closeAllMemorySearchManagers?(): Promise<void>;
 };
