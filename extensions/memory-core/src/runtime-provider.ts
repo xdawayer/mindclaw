@@ -10,7 +10,6 @@ export const memoryRuntime: MemoryPluginRuntime = {
   async getMemorySearchManager(params) {
     const resolved = resolveScopedMemoryRuntimeContext({
       cfg: params.cfg,
-      // Keep backend selection agent-scoped even when collaboration memory narrows the session scope.
       agentId: params.agentId,
       agentSessionKey: params.agentSessionKey,
     });
@@ -18,6 +17,7 @@ export const memoryRuntime: MemoryPluginRuntime = {
       cfg: params.cfg,
       agentId: resolved.agentId,
       purpose: params.purpose,
+      collaborationScope: resolved.collaborationScope,
     });
     return {
       manager: manager

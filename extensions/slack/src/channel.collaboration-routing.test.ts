@@ -75,4 +75,29 @@ describe("resolveSlackInboundRoute", () => {
     expect(route.agentId).toBe("main");
     expect(route.matchedBy).toBe("binding.account");
   });
+
+  it("lets an explicit peer binding override collaboration routing for the same Slack channel", () => {
+    const route = resolveSlackInboundRoute({
+      cfg: {
+        ...cfg,
+        bindings: [
+          {
+            agentId: "main",
+            match: {
+              channel: "slack",
+              accountId: "default",
+              peer: { kind: "channel", id: "CPROJ1234" },
+            },
+          },
+        ],
+      },
+      accountId: "default",
+      teamId: "T1",
+      peer: { kind: "channel", id: "CPROJ1234" },
+      messageText: "Need @ops to look at this deploy",
+    });
+
+    expect(route.agentId).toBe("main");
+    expect(route.matchedBy).toBe("binding.peer");
+  });
 });

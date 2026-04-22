@@ -28,6 +28,7 @@ describe("slack thread ownership", () => {
 
   it("claims the first collaboration thread reply owner", () => {
     const result = resolveSlackThreadOwnedRoute({
+      enabled: true,
       route: makeRoute("product", "collaboration.project.default"),
       isThreadReply: true,
       accountId: "default",
@@ -48,6 +49,7 @@ describe("slack thread ownership", () => {
 
   it("keeps subsequent thread replies on the claimed owner", () => {
     resolveSlackThreadOwnedRoute({
+      enabled: true,
       route: makeRoute("product", "collaboration.project.default"),
       isThreadReply: true,
       accountId: "default",
@@ -57,6 +59,7 @@ describe("slack thread ownership", () => {
     });
 
     const result = resolveSlackThreadOwnedRoute({
+      enabled: true,
       route: makeRoute("ops", "collaboration.project.default"),
       isThreadReply: true,
       accountId: "default",
@@ -71,6 +74,7 @@ describe("slack thread ownership", () => {
 
   it("switches owner when the thread contains an explicit role mention route", () => {
     resolveSlackThreadOwnedRoute({
+      enabled: true,
       route: makeRoute("product", "collaboration.project.default"),
       isThreadReply: true,
       accountId: "default",
@@ -80,6 +84,7 @@ describe("slack thread ownership", () => {
     });
 
     const result = resolveSlackThreadOwnedRoute({
+      enabled: true,
       route: makeRoute("ops", "collaboration.project.mention"),
       isThreadReply: true,
       accountId: "default",
@@ -100,6 +105,7 @@ describe("slack thread ownership", () => {
 
   it("does not mutate ownership for top-level channel messages", () => {
     const result = resolveSlackThreadOwnedRoute({
+      enabled: true,
       route: makeRoute("product", "collaboration.project.default"),
       isThreadReply: false,
       accountId: "default",
@@ -116,5 +122,30 @@ describe("slack thread ownership", () => {
         threadTs: "1710000000.000100",
       }),
     ).toBeNull();
+  });
+
+  it("does not pin a previous explicit owner when sticky-thread behavior is not applied", () => {
+    resolveSlackThreadOwnedRoute({
+      enabled: false,
+      route: makeRoute("ops", "collaboration.project.mention"),
+      isThreadReply: false,
+      accountId: "default",
+      channelId: "CPROJ1234",
+      threadTs: undefined,
+      buildRouteForAgent: (agentId, matchedBy) => makeRoute(agentId, matchedBy),
+    });
+
+    const result = resolveSlackThreadOwnedRoute({
+      enabled: false,
+      route: makeRoute("product", "collaboration.project.default"),
+      isThreadReply: false,
+      accountId: "default",
+      channelId: "CPROJ1234",
+      threadTs: undefined,
+      buildRouteForAgent: (agentId, matchedBy) => makeRoute(agentId, matchedBy),
+    });
+
+    expect(result.route.agentId).toBe("product");
+    expect(result.route.matchedBy).toBe("collaboration.project.default");
   });
 });

@@ -168,6 +168,9 @@ export function resolveFailureDestination(
   }
 
   applyFailureDestinationLayer(base, globalConfig);
+  if (collaborationFailureTarget) {
+    applyFailureDestinationLayer(base, collaborationFailureTarget);
+  }
   if (hasJobFailureDest) {
     applyFailureDestinationLayer(base, jobFailureDest);
   }

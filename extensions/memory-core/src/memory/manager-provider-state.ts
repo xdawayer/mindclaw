@@ -29,7 +29,65 @@ export type ResolvedScopedMemoryRuntimeContext = {
   agentId: string;
   agentSessionKey?: string;
   collaborationScope?: ResolvedMemoryCollaborationScope;
+  collaborationParticipantAgentIds?: string[];
 };
+
+function parseScopedId(
+  scope: string | undefined,
+  expectedPrefix: "project" | "role",
+): string | undefined {
+  const trimmed = scope?.trim();
+  if (!trimmed?.startsWith(`${expectedPrefix}:`)) {
+    return undefined;
+  }
+  const id = trimmed.slice(expectedPrefix.length + 1).trim();
+  return id || undefined;
+}
+
+export function resolveScopedMemoryManagerContext(params: {
+  cfg?: OpenClawConfig;
+  agentId: string;
+  collaborationScope?: ResolvedMemoryCollaborationScope;
+}): {
+  agentId: string;
+  collaborationParticipantAgentIds?: string[];
+} {
+  const scope = params.collaborationScope;
+  if (!scope || scope.kind === "private") {
+    return {
+      agentId: params.agentId,
+    };
+  }
+
+  if (scope.kind === "project") {
+    const projectId = parseScopedId(scope.scope, "project");
+    const project =
+      projectId && params.cfg?.collaboration?.spaces?.projects
+        ? params.cfg.collaboration.spaces.projects[projectId]
+        : undefined;
+    const agentId = project?.defaultAgent?.trim() || params.agentId;
+    const roleAgentIds = Object.values(params.cfg?.collaboration?.spaces?.roles ?? {})
+      .map((role) => role.agentId?.trim())
+      .filter((value): value is string => Boolean(value));
+    return {
+      agentId,
+      collaborationParticipantAgentIds: [agentId, ...roleAgentIds].filter(
+        (value, index, array) => array.indexOf(value) === index,
+      ),
+    };
+  }
+
+  const roleId = parseScopedId(scope.scope, "role");
+  const role =
+    roleId && params.cfg?.collaboration?.spaces?.roles
+      ? params.cfg.collaboration.spaces.roles[roleId]
+      : undefined;
+  const agentId = role?.agentId?.trim() || params.agentId;
+  return {
+    agentId,
+    collaborationParticipantAgentIds: [agentId],
+  };
+}
 
 function normalizeLookup(value: string | undefined | null): string {
   return (value ?? "").trim().toLowerCase();
@@ -140,9 +198,15 @@ export function resolveScopedMemoryRuntimeContext(params: {
   agentSessionKey?: string;
 }): ResolvedScopedMemoryRuntimeContext {
   const collaborationScope = resolveMemoryCollaborationScope(params) ?? undefined;
-  return {
+  const managerContext = resolveScopedMemoryManagerContext({
+    cfg: params.cfg,
     agentId: params.agentId,
     collaborationScope,
+  });
+  return {
+    agentId: managerContext.agentId,
+    collaborationScope,
+    collaborationParticipantAgentIds: managerContext.collaborationParticipantAgentIds,
     agentSessionKey: scopeMemorySessionKey({
       agentSessionKey: params.agentSessionKey,
       collaborationScope,

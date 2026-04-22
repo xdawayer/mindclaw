@@ -754,23 +754,6 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     }
   }
 
-  const collaborationRoute =
-    channel === "slack"
-      ? resolveSlackCollaborationRoute({
-          cfg: input.cfg,
-          peer,
-          messageText: input.messageText,
-        })
-      : null;
-  if (collaborationRoute) {
-    if (shouldLogDebug) {
-      logDebug(
-        `[routing] collaboration match: matchedBy=${collaborationRoute.matchedBy} agentId=${collaborationRoute.agentId}`,
-      );
-    }
-    return choose(collaborationRoute.agentId, collaborationRoute.matchedBy);
-  }
-
   // Thread parent inheritance: if peer (thread) didn't match, check parent peer binding
   const baseScope = {
     guildId,
@@ -845,7 +828,50 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     },
   ];
 
-  for (const tier of tiers) {
+  const collaborationRoute =
+    channel === "slack"
+      ? resolveSlackCollaborationRoute({
+          cfg: input.cfg,
+          peer,
+          messageText: input.messageText,
+        })
+      : null;
+
+  // Preserve explicit peer-level binding precedence, then let Slack collaboration
+  // routing override broader workspace/account defaults.
+  const preCollaborationTiers = tiers.slice(0, 3);
+  const postCollaborationTiers = tiers.slice(3);
+
+  for (const tier of preCollaborationTiers) {
+    if (!tier.enabled) {
+      continue;
+    }
+    const matched = tier.candidates.find(
+      (candidate) =>
+        tier.predicate(candidate) &&
+        matchesBindingScope(candidate.match, {
+          ...baseScope,
+          peer: tier.scopePeer,
+        }),
+    );
+    if (matched) {
+      if (shouldLogDebug) {
+        logDebug(`[routing] match: matchedBy=${tier.matchedBy} agentId=${matched.binding.agentId}`);
+      }
+      return choose(matched.binding.agentId, tier.matchedBy);
+    }
+  }
+
+  if (collaborationRoute) {
+    if (shouldLogDebug) {
+      logDebug(
+        `[routing] collaboration match: matchedBy=${collaborationRoute.matchedBy} agentId=${collaborationRoute.agentId}`,
+      );
+    }
+    return choose(collaborationRoute.agentId, collaborationRoute.matchedBy);
+  }
+
+  for (const tier of postCollaborationTiers) {
     if (!tier.enabled) {
       continue;
     }

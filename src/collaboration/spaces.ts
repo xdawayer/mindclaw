@@ -4,7 +4,6 @@ import type {
   CollaborationPrivateSpace,
   CollaborationProjectSpace,
   CollaborationRoleSpace,
-  CollaborationSpace,
 } from "./types.js";
 
 function normalizeSlackChannelId(value: string | undefined | null): string {
@@ -94,7 +93,7 @@ export function resolveRoleSpaceBySlackChannelId(
 export function resolveSlackSpaceByChannelId(
   cfg: OpenClawConfig | undefined,
   slackChannelId: string | undefined | null,
-): CollaborationSpace | null {
+): CollaborationProjectSpace | CollaborationRoleSpace | null {
   return (
     resolveProjectSpaceBySlackChannelId(cfg, slackChannelId) ??
     resolveRoleSpaceBySlackChannelId(cfg, slackChannelId)

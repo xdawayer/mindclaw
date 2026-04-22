@@ -35,7 +35,13 @@ vi.mock("../memory/index.js", () => ({
 import { memoryRuntime } from "../runtime-provider.js";
 
 const cfg: OpenClawConfig = {
-  agents: { list: [{ id: "main", default: true }] },
+  agents: {
+    list: [
+      { id: "product", default: true },
+      { id: "ops" },
+      { id: "main" },
+    ],
+  },
   collaboration: {
     spaces: {
       projects: {
@@ -130,5 +136,23 @@ describe("memory collaboration scope runtime plumbing", () => {
     expect(runtimeManager.search).toHaveBeenLastCalledWith("private note", {
       sessionKey: "agent:main:slack:dm:UOPS1234:memory-scope:private:UOPS1234",
     });
+  });
+
+  it("anchors project-scoped memory managers to the project's default agent across handoffs", async () => {
+    await memoryRuntime.getMemorySearchManager({
+      cfg,
+      agentId: "ops",
+      agentSessionKey: "agent:ops:slack:channel:CPROJ1234:thread:1710000000.000100",
+    } as never);
+
+    expect(getRuntimeSearchManagerMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        agentId: "product",
+        collaborationScope: {
+          kind: "project",
+          scope: "project:proj-a",
+        },
+      }),
+    );
   });
 });

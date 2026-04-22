@@ -20,7 +20,6 @@ import { resolveOutboundSendDep } from "openclaw/plugin-sdk/outbound-runtime";
 import {
   buildOutboundBaseSessionKey,
   normalizeOutboundThreadId,
-  resolveAgentRoute,
   resolveThreadSessionKeys,
   type RoutePeer,
 } from "openclaw/plugin-sdk/routing";
@@ -72,6 +71,7 @@ import {
   SLACK_CHANNEL,
   slackConfigAdapter,
 } from "./shared.js";
+export { resolveSlackInboundRoute } from "./inbound-route.js";
 import { parseSlackTarget } from "./target-parsing.js";
 import { buildSlackThreadingToolContext } from "./threading-tool-context.js";
 
@@ -197,23 +197,6 @@ function buildSlackBaseSessionKey(params: {
   peer: RoutePeer;
 }) {
   return buildOutboundBaseSessionKey({ ...params, channel: "slack" });
-}
-
-export function resolveSlackInboundRoute(params: {
-  cfg: OpenClawConfig;
-  accountId?: string | null;
-  teamId?: string | null;
-  peer: RoutePeer;
-  messageText?: string | null;
-}) {
-  return resolveAgentRoute({
-    cfg: params.cfg,
-    channel: "slack",
-    accountId: params.accountId,
-    teamId: params.teamId,
-    peer: params.peer,
-    messageText: params.messageText,
-  });
 }
 
 async function resolveSlackOutboundSessionRoute(params: {

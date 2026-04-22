@@ -62,6 +62,19 @@ function createCtx() {
   return ctx;
 }
 
+function createCtxWithConfig(nextCfg: OpenClawConfig) {
+  const ctx = createInboundSlackTestContext({
+    cfg: nextCfg,
+    defaultRequireMention: false,
+  });
+  ctx.resolveUserName = async () => ({ name: "Alice" });
+  ctx.resolveChannelName = async (channelId: string) => ({
+    name: channelId,
+    type: channelId.startsWith("D") ? "im" : "channel",
+  });
+  return ctx;
+}
+
 function createMessage(overrides: Partial<SlackMessageEvent>): SlackMessageEvent {
   return {
     channel: "CPROJ1234",
@@ -142,5 +155,41 @@ describe("Slack thread ownership routing", () => {
 
     expect(after?.route.agentId).toBe("ops");
     expect(after?.route.matchedBy).toBe("collaboration.thread.owner");
+  });
+
+  it("does not pin thread ownership when stickyThreadOwner is disabled", async () => {
+    const cfgWithoutSticky: OpenClawConfig = {
+      ...cfg,
+      collaboration: {
+        ...cfg.collaboration,
+        routing: {
+          explicitMentionsOverride: true,
+          stickyThreadOwner: false,
+        },
+      },
+    };
+
+    await prepareSlackMessage({
+      ctx: createCtxWithConfig(cfgWithoutSticky),
+      account: createSlackTestAccount(),
+      message: createMessage({
+        text: "Need @ops on this thread now",
+        thread_ts: "1710000000.000100",
+      }),
+      opts: { source: "message" },
+    });
+
+    const followup = await prepareSlackMessage({
+      ctx: createCtxWithConfig(cfgWithoutSticky),
+      account: createSlackTestAccount(),
+      message: createMessage({
+        text: "follow-up without explicit role",
+        thread_ts: "1710000000.000100",
+      }),
+      opts: { source: "message" },
+    });
+
+    expect(followup?.route.agentId).toBe("product");
+    expect(followup?.route.matchedBy).toBe("collaboration.project.default");
   });
 });

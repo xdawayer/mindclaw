@@ -12,6 +12,7 @@ export type SlackThreadOwnershipResolution = {
 };
 
 export function resolveSlackThreadOwnedRoute(params: {
+  enabled?: boolean;
   route: ResolvedAgentRoute;
   isThreadReply: boolean;
   accountId?: string | null;
@@ -22,7 +23,7 @@ export function resolveSlackThreadOwnedRoute(params: {
     matchedBy: ResolvedAgentRoute["matchedBy"],
   ) => ResolvedAgentRoute;
 }): SlackThreadOwnershipResolution {
-  if (!params.isThreadReply || !params.threadTs) {
+  if (!params.enabled || !params.isThreadReply || !params.threadTs) {
     return {
       route: params.route,
       ownership: null,

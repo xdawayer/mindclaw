@@ -248,6 +248,37 @@ describe("resolveFailureDestination", () => {
     expect(plan).toBeNull();
   });
 
+  it("keeps collaboration failure routing ahead of global defaults", () => {
+    const plan = resolveFailureDestination(
+      makeJob({
+        delivery: {
+          mode: "announce",
+          channel: "telegram",
+          to: "111",
+        },
+      }),
+      {
+        channel: "signal",
+        to: "group-signal",
+        mode: "announce",
+      },
+      {
+        cfg: collaborationConfig,
+        collaborationTarget: {
+          projectChannelId: "CPROJ1234",
+          roleId: "ops",
+        },
+      },
+    );
+
+    expect(plan).toEqual({
+      mode: "announce",
+      channel: "slack",
+      to: "channel:CPROJ1234",
+      accountId: undefined,
+    });
+  });
+
   it("does not reuse inherited announce recipient when switching failure destination to webhook", () => {
     const plan = resolveFailureDestination(
       makeJob({

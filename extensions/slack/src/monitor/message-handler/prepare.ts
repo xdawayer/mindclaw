@@ -31,7 +31,7 @@ import {
 } from "openclaw/plugin-sdk/text-runtime";
 import { resolveSlackReplyToMode, type ResolvedSlackAccount } from "../../accounts.js";
 import { reactSlackMessage } from "../../actions.js";
-import { resolveSlackInboundRoute } from "../../channel.js";
+import { resolveSlackInboundRoute } from "../../inbound-route.js";
 import { hasSlackThreadParticipation } from "../../sent-thread-cache.js";
 import { resolveSlackThreadOwnedRoute } from "../../thread-ownership.js";
 import { resolveSlackThreadContext } from "../../threading.js";
@@ -310,6 +310,7 @@ function resolveSlackRoutingContext(params: {
     id: isDirectMessage ? (message.user ?? "unknown") : message.channel,
   };
   const { route } = resolveSlackThreadOwnedRoute({
+    enabled: ctx.cfg.collaboration?.routing?.stickyThreadOwner === true,
     route: baseRoute,
     isThreadReply: Boolean(roomThreadId),
     accountId: account.accountId,

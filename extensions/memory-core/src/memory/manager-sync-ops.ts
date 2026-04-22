@@ -50,6 +50,7 @@ import {
   applyMemoryFallbackProviderState,
   resolveMemoryFallbackProviderRequest,
 } from "./manager-provider-state.js";
+import { listSessionFilesForCollaborationScope } from "./collaboration-session-files.js";
 import {
   resolveConfiguredScopeHash,
   resolveConfiguredSourcesForMeta,
@@ -90,6 +91,22 @@ const IGNORED_MEMORY_WATCH_DIR_NAMES = new Set([
 
 const log = createSubsystemLogger("memory");
 
+async function listRelevantSessionFiles(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  collaborationScope?: { kind: "private" | "project" | "role"; scope: string };
+  collaborationParticipantAgentIds?: string[];
+}): Promise<string[]> {
+  if (params.collaborationScope && params.collaborationParticipantAgentIds?.length) {
+    return await listSessionFilesForCollaborationScope({
+      cfg: params.cfg,
+      collaborationScope: params.collaborationScope,
+      candidateAgentIds: params.collaborationParticipantAgentIds,
+    });
+  }
+  return await listSessionFilesForAgent(params.agentId);
+}
+
 function shouldIgnoreMemoryWatchPath(
   watchPath: string,
   stats?: { isDirectory?: () => boolean },
@@ -125,6 +142,13 @@ export abstract class MemoryManagerSyncOps {
   protected abstract readonly cfg: OpenClawConfig;
   protected abstract readonly agentId: string;
   protected abstract readonly workspaceDir: string;
+  protected abstract readonly collaborationScope?:
+    | {
+        kind: "private" | "project" | "role";
+        scope: string;
+      }
+    | undefined;
+  protected abstract readonly collaborationParticipantAgentIds?: string[] | undefined;
   protected abstract readonly settings: ResolvedMemorySearchConfig;
   protected provider: EmbeddingProvider | null = null;
   protected fallbackFrom?: EmbeddingProviderId;
@@ -775,7 +799,12 @@ export abstract class MemoryManagerSyncOps {
       : this.normalizeTargetSessionFiles(params.targetSessionFiles);
     const files = targetSessionFiles
       ? Array.from(targetSessionFiles)
-      : await listSessionFilesForAgent(this.agentId);
+      : await listRelevantSessionFiles({
+          cfg: this.cfg,
+          agentId: this.agentId,
+          collaborationScope: this.collaborationScope,
+          collaborationParticipantAgentIds: this.collaborationParticipantAgentIds,
+        });
     const sessionPlan = resolveMemorySessionSyncPlan({
       needsFullReindex: params.needsFullReindex,
       files,
