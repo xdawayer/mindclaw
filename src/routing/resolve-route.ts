@@ -15,6 +15,7 @@ import {
   normalizeAgentId,
   sanitizeAgentId,
 } from "./session-key.js";
+import { resolveSlackCollaborationRoute } from "./slack-collaboration-routing.js";
 
 /** @deprecated Use ChatType from channels/chat-type.js */
 export type RoutePeerKind = ChatType;
@@ -35,6 +36,8 @@ export type ResolveAgentRouteInput = {
   teamId?: string | null;
   /** Discord member role IDs — used for role-based agent routing. */
   memberRoleIds?: string[];
+  /** Slack collaboration routing can use the current message text for explicit role mentions. */
+  messageText?: string | null;
 };
 
 export type ResolvedAgentRoute = {
@@ -49,6 +52,9 @@ export type ResolvedAgentRoute = {
   lastRoutePolicy: "main" | "session";
   /** Match description for debugging/logging. */
   matchedBy:
+    | "collaboration.project.default"
+    | "collaboration.project.mention"
+    | "collaboration.role"
     | "binding.peer"
     | "binding.peer.parent"
     | "binding.peer.wildcard"
@@ -645,6 +651,12 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
   const dmScope = input.cfg.session?.dmScope ?? "main";
   const identityLinks = input.cfg.session?.identityLinks;
   const shouldLogDebug = shouldLogVerbose();
+  // Only Slack collaboration routes with explicit mention overrides are truly
+  // message-text-scoped. Keep caching enabled for other Slack traffic.
+  const hasMessageScopedRouting =
+    channel === "slack" &&
+    input.messageText !== undefined &&
+    input.cfg.collaboration?.routing?.explicitMentionsOverride === true;
   const parentPeer = input.parentPeer
     ? {
         kind: normalizeChatType(input.parentPeer.kind) ?? input.parentPeer.kind,
@@ -653,7 +665,9 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     : null;
 
   const routeCache =
-    !shouldLogDebug && !identityLinks ? resolveRouteCacheForConfig(input.cfg) : null;
+    !shouldLogDebug && !identityLinks && !hasMessageScopedRouting
+      ? resolveRouteCacheForConfig(input.cfg)
+      : null;
   const routeCacheKey = routeCache
     ? buildResolvedRouteCacheKey({
         channel,
@@ -738,6 +752,24 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
       );
     }
   }
+
+  const collaborationRoute =
+    channel === "slack"
+      ? resolveSlackCollaborationRoute({
+          cfg: input.cfg,
+          peer,
+          messageText: input.messageText,
+        })
+      : null;
+  if (collaborationRoute) {
+    if (shouldLogDebug) {
+      logDebug(
+        `[routing] collaboration match: matchedBy=${collaborationRoute.matchedBy} agentId=${collaborationRoute.agentId}`,
+      );
+    }
+    return choose(collaborationRoute.agentId, collaborationRoute.matchedBy);
+  }
+
   // Thread parent inheritance: if peer (thread) didn't match, check parent peer binding
   const baseScope = {
     guildId,

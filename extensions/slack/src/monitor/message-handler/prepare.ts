@@ -1,8 +1,5 @@
 import { resolveAckReaction } from "openclaw/plugin-sdk/agent-runtime";
-import {
-  shouldAckReaction as shouldAckReactionGate,
-  type AckReactionScope,
-} from "openclaw/plugin-sdk/channel-feedback";
+import { shouldAckReaction as shouldAckReactionGate } from "openclaw/plugin-sdk/channel-feedback";
 import {
   buildMentionRegexes,
   formatInboundEnvelope,
@@ -21,7 +18,6 @@ import {
   recordPendingHistoryEntryIfEnabled,
 } from "openclaw/plugin-sdk/reply-history";
 import type { FinalizedMsgContext } from "openclaw/plugin-sdk/reply-runtime";
-import { resolveAgentRoute } from "openclaw/plugin-sdk/routing";
 import { resolveThreadSessionKeys } from "openclaw/plugin-sdk/routing";
 import { logVerbose, shouldLogVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { resolvePinnedMainDmOwnerFromAllowlist } from "openclaw/plugin-sdk/security-runtime";
@@ -31,6 +27,7 @@ import {
 } from "openclaw/plugin-sdk/text-runtime";
 import { resolveSlackReplyToMode, type ResolvedSlackAccount } from "../../accounts.js";
 import { reactSlackMessage } from "../../actions.js";
+import { resolveSlackInboundRoute } from "../../channel.js";
 import { hasSlackThreadParticipation } from "../../sent-thread-cache.js";
 import { resolveSlackThreadContext } from "../../threading.js";
 import type { SlackMessageEvent } from "../../types.js";
@@ -104,7 +101,7 @@ type SlackAuthorizationContext = {
 };
 
 type SlackRoutingContext = {
-  route: ReturnType<typeof resolveAgentRoute>;
+  route: ReturnType<typeof resolveSlackInboundRoute>;
   chatType: "direct" | "group" | "channel";
   replyToMode: ReturnType<typeof resolveSlackReplyToMode>;
   threadContext: ReturnType<typeof resolveSlackThreadContext>;
@@ -270,15 +267,15 @@ function resolveSlackRoutingContext(params: {
   isRoomish: boolean;
 }): SlackRoutingContext {
   const { ctx, account, message, isDirectMessage, isGroupDm, isRoom, isRoomish } = params;
-  const route = resolveAgentRoute({
+  const route = resolveSlackInboundRoute({
     cfg: ctx.cfg,
-    channel: "slack",
     accountId: account.accountId,
     teamId: ctx.teamId || undefined,
     peer: {
       kind: isDirectMessage ? "direct" : isRoom ? "channel" : "group",
       id: isDirectMessage ? (message.user ?? "unknown") : message.channel,
     },
+    messageText: message.text ?? undefined,
   });
 
   const chatType = isDirectMessage ? "direct" : isGroupDm ? "group" : "channel";
@@ -567,12 +564,21 @@ export async function prepareSlackMessage(params: {
     accountId: account.accountId,
   });
   const ackReactionValue = ackReaction ?? "";
+  const ackReactionScope =
+    ctx.ackReactionScope === "all" ||
+    ctx.ackReactionScope === "direct" ||
+    ctx.ackReactionScope === "group-all" ||
+    ctx.ackReactionScope === "group-mentions" ||
+    ctx.ackReactionScope === "off" ||
+    ctx.ackReactionScope === "none"
+      ? ctx.ackReactionScope
+      : undefined;
 
   const shouldAckReaction = () =>
     Boolean(
       ackReaction &&
       shouldAckReactionGate({
-        scope: ctx.ackReactionScope as AckReactionScope | undefined,
+        scope: ackReactionScope,
         isDirect: isDirectMessage,
         isGroup: isRoomish,
         isMentionableGroup: isRoom,

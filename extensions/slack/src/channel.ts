@@ -20,6 +20,7 @@ import { resolveOutboundSendDep } from "openclaw/plugin-sdk/outbound-runtime";
 import {
   buildOutboundBaseSessionKey,
   normalizeOutboundThreadId,
+  resolveAgentRoute,
   resolveThreadSessionKeys,
   type RoutePeer,
 } from "openclaw/plugin-sdk/routing";
@@ -196,6 +197,23 @@ function buildSlackBaseSessionKey(params: {
   peer: RoutePeer;
 }) {
   return buildOutboundBaseSessionKey({ ...params, channel: "slack" });
+}
+
+export function resolveSlackInboundRoute(params: {
+  cfg: OpenClawConfig;
+  accountId?: string | null;
+  teamId?: string | null;
+  peer: RoutePeer;
+  messageText?: string | null;
+}) {
+  return resolveAgentRoute({
+    cfg: params.cfg,
+    channel: "slack",
+    accountId: params.accountId,
+    teamId: params.teamId,
+    peer: params.peer,
+    messageText: params.messageText,
+  });
 }
 
 async function resolveSlackOutboundSessionRoute(params: {
@@ -379,10 +397,8 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount, SlackProbe> = crea
     }),
     resolver: {
       resolveTargets: async ({ cfg, accountId, inputs, kind }) => {
-        const toResolvedTarget = <
-          T extends { input: string; resolved: boolean; id?: string; name?: string },
-        >(
-          entry: T,
+        const toResolvedTarget = (
+          entry: { input: string; resolved: boolean; id?: string; name?: string },
           note?: string,
         ) => ({
           input: entry.input,
@@ -444,7 +460,13 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount, SlackProbe> = crea
         return await (await loadSlackProbeModule()).probeSlack(token, timeoutMs);
       },
       formatCapabilitiesProbe: ({ probe }) => {
-        const slackProbe = probe as SlackProbe | undefined;
+        if (!probe || typeof probe !== "object") {
+          return [];
+        }
+        const slackProbe = probe as {
+          bot?: { name?: string };
+          team?: { id?: string; name?: string };
+        };
         const lines = [];
         if (slackProbe?.bot?.name) {
           lines.push({ text: `Bot: @${slackProbe.bot.name}` });
