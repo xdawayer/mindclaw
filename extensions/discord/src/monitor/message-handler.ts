@@ -114,7 +114,9 @@ export function createDiscordMessageHandler(
       if (!last) {
         return;
       }
-      const replayKeys = entries.map((entry) => entry.replayKey).filter(Boolean);
+      const replayKeys = entries
+        .map((entry) => entry.replayKey)
+        .filter((replayKey): replayKey is string => Boolean(replayKey));
       const abortSignal = last.abortSignal;
       if (abortSignal?.aborted) {
         releaseDiscordInboundReplay({
@@ -177,7 +179,9 @@ export function createDiscordMessageHandler(
         }
         applyImplicitReplyBatchGate(ctx, params.replyToMode, true);
         if (entries.length > 1) {
-          const ids = entries.map((entry) => entry.data.message?.id).filter(Boolean) as string[];
+          const ids = entries
+            .map((entry) => entry.data.message?.id)
+            .filter((id): id is string => Boolean(id));
           if (ids.length > 0) {
             const ctxBatch = ctx as typeof ctx & {
               MessageSids?: string[];

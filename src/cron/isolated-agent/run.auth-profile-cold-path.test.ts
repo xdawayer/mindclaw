@@ -6,6 +6,7 @@ vi.mock("../../agents/auth-profiles/source-check.js", () => ({
   hasAnyAuthProfileStoreSource: hasAnyAuthProfileStoreSourceMock,
 }));
 
+import type { CronJob } from "../types.js";
 import {
   clearFastTestEnv,
   loadRunCronIsolatedAgentTurn,
@@ -17,16 +18,22 @@ import {
 const runCronIsolatedAgentTurn = await loadRunCronIsolatedAgentTurn();
 
 function makeParams(overrides?: Record<string, unknown>) {
+  const job: CronJob = {
+    id: "cron-auth-cold-path",
+    name: "Auth Cold Path",
+    enabled: true,
+    createdAtMs: 0,
+    updatedAtMs: 0,
+    schedule: { kind: "cron", expr: "0 * * * *", tz: "UTC" },
+    sessionTarget: "isolated",
+    wakeMode: "next-heartbeat",
+    payload: { kind: "agentTurn", message: "run task" },
+    state: {},
+  };
   return {
     cfg: {},
     deps: {} as never,
-    job: {
-      id: "cron-auth-cold-path",
-      name: "Auth Cold Path",
-      schedule: { kind: "cron", expr: "0 * * * *", tz: "UTC" },
-      sessionTarget: "isolated",
-      payload: { kind: "agentTurn", message: "run task" },
-    },
+    job,
     message: "run task",
     sessionKey: "cron:auth-cold-path",
     ...overrides,

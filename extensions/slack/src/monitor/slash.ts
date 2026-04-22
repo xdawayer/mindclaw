@@ -17,6 +17,7 @@ import {
   buildSlackSyncReviewBlocks,
   SLACK_SYNC_REVIEW_APPROVE_ACTION_ID,
   SLACK_SYNC_REVIEW_REJECT_ACTION_ID,
+  type SlackBlock,
 } from "../blocks-render.js";
 import { truncateSlackText } from "../truncate.js";
 import { resolveSlackAllowListMatch, resolveSlackUserAllowed } from "./allow-list.js";
@@ -35,7 +36,6 @@ import { escapeSlackMrkdwn } from "./mrkdwn.js";
 import { isSlackChannelAllowedByPolicy } from "./policy.js";
 import { resolveSlackRoomContextHints } from "./room-context.js";
 
-type SlackBlock = { type: string; [key: string]: unknown };
 type SlackSyncReviewRequest = {
   direction: "dm_to_shared";
   id: string;
