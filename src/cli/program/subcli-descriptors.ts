@@ -139,6 +139,11 @@ const subCliCommandCatalog = defineCommandDescriptorCatalog([
     hasSubcommands: true,
   },
   {
+    name: "collaboration",
+    description: "Validate and explain Slack collaboration routing and policy",
+    hasSubcommands: true,
+  },
+  {
     name: "directory",
     description: "Lookup contact and group IDs (self, peers, groups) for supported chat channels",
     hasSubcommands: true,

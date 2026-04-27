@@ -194,6 +194,11 @@ const entrySpecs: readonly CommandGroupDescriptorSpec<SubCliRegistrar>[] = [
       exportName: "registerChannelsCli",
     },
     {
+      commandNames: ["collaboration"],
+      loadModule: () => import("../collaboration-cli.js"),
+      exportName: "registerCollaborationCli",
+    },
+    {
       commandNames: ["directory"],
       loadModule: () => import("../directory-cli.js"),
       exportName: "registerDirectoryCli",
