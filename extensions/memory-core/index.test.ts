@@ -13,14 +13,16 @@ describe("buildPromptSection", () => {
     expect(buildPromptSection({ availableTools: new Set() })).toEqual([]);
   });
 
-  it("describes the two-step flow when both memory tools are available", () => {
+  it("describes recall plus publish guidance when all memory tools are available", () => {
     const result = buildPromptSection({
-      availableTools: new Set(["memory_search", "memory_get"]),
+      availableTools: new Set(["memory_search", "memory_get", "memory_publish"]),
     });
     expect(result[0]).toBe("## Memory Recall");
     expect(result[1]).toContain("run memory_search");
     expect(result[1]).toContain("then use memory_get");
     expect(result[1]).toContain("indexed session transcripts");
+    expect(result[2]).toContain("use memory_publish");
+    expect(result[2]).toContain("role_shared or space_shared");
     expect(result).toContain(
       "Citations: include Source: <path#line> when it helps the user verify memory snippets.",
     );
@@ -40,6 +42,13 @@ describe("buildPromptSection", () => {
     expect(result[0]).toBe("## Memory Recall");
     expect(result[1]).toContain("run memory_get");
     expect(result[1]).not.toContain("run memory_search");
+  });
+
+  it("returns publish guidance when memory_publish is the only memory tool", () => {
+    const result = buildPromptSection({ availableTools: new Set(["memory_publish"]) });
+    expect(result[0]).toBe("## Memory Recall");
+    expect(result[1]).toContain("use memory_publish");
+    expect(result[1]).toContain("role_shared or space_shared");
   });
 
   it("includes citations-off instruction when citationsMode is off", () => {

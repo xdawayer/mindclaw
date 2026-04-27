@@ -21,6 +21,13 @@ import {
   shouldIncludeCitations,
 } from "./tools.citations.js";
 import {
+  buildCollaborationReadDebug,
+  buildCollaborationSearchDebug,
+  filterMemorySearchResultsByCollaboration,
+  isMemoryReadAllowedByCollaboration,
+  resolveCollaborationScopeGate,
+} from "./tools.collaboration.js";
+import {
   buildMemorySearchUnavailableResult,
   createMemoryTool,
   getMemoryCorpusSupplementResult,
@@ -200,6 +207,11 @@ export function createMemorySearchTool(options: {
           | "all"
           | undefined;
         const { resolveMemoryBackendConfig } = await loadMemoryToolRuntime();
+        const collaborationGate = resolveCollaborationScopeGate({
+          cfg,
+          agentId,
+          agentSessionKey: options.agentSessionKey,
+        });
         const shouldQueryMemory = requestedCorpus !== "wiki";
         const shouldQuerySupplements = requestedCorpus === "wiki" || requestedCorpus === "all";
         const memory = shouldQueryMemory ? await getMemoryManagerContext({ cfg, agentId }) : null;
@@ -229,6 +241,7 @@ export function createMemorySearchTool(options: {
                 fallback?: string;
                 searchMs: number;
                 hits: number;
+                collaboration?: ReturnType<typeof buildCollaborationSearchDebug>;
               }
             | undefined;
           if (shouldQueryMemory && memory && !("error" in memory)) {
@@ -253,7 +266,11 @@ export function createMemorySearchTool(options: {
               status.backend === "qmd"
                 ? clampResultsByInjectedChars(decorated, resolved.qmd?.limits.maxInjectedChars)
                 : decorated;
-            surfacedMemoryResults = memoryResults.map((result) => ({
+            const collaborationFiltered = filterMemorySearchResultsByCollaboration(
+              memoryResults,
+              collaborationGate,
+            );
+            surfacedMemoryResults = collaborationFiltered.results.map((result) => ({
               ...result,
               corpus: "memory" as const,
             }));
@@ -265,7 +282,7 @@ export function createMemorySearchTool(options: {
               workspaceDir: status.workspaceDir,
               query,
               rawResults,
-              surfacedResults: memoryResults,
+              surfacedResults: collaborationFiltered.results,
               timezone: sleepTimezone,
             });
             provider = status.provider;
@@ -273,6 +290,15 @@ export function createMemorySearchTool(options: {
             fallback = status.fallback;
             const latestDebug = runtimeDebug.at(-1);
             searchMode = latestDebug?.effectiveMode;
+            const collaborationDebug = buildCollaborationSearchDebug({
+              gate: collaborationGate,
+            });
+            // When a collaboration gate filtered any rows, report only the
+            // post-filter count to avoid leaking how many rows the model is
+            // not allowed to see. Otherwise the raw count is fine.
+            const visibleHits = collaborationGate
+              ? surfacedMemoryResults.length
+              : rawResults.length;
             searchDebug = {
               backend: status.backend,
               configuredMode: latestDebug?.configuredMode,
@@ -282,7 +308,8 @@ export function createMemorySearchTool(options: {
                   : "n/a",
               fallback: latestDebug?.fallback,
               searchMs: Math.max(0, Date.now() - searchStartedAt),
-              hits: rawResults.length,
+              hits: visibleHits,
+              ...(collaborationDebug ? { collaboration: collaborationDebug } : {}),
             };
           }
           const supplementResults = shouldQuerySupplements
@@ -341,6 +368,32 @@ export function createMemoryGetTool(options: {
           | "all"
           | undefined;
         const { readAgentMemoryFile, resolveMemoryBackendConfig } = await loadMemoryToolRuntime();
+        const collaborationGate = resolveCollaborationScopeGate({
+          cfg,
+          agentId,
+          agentSessionKey: options.agentSessionKey,
+        });
+        if (
+          requestedCorpus !== "wiki" &&
+          !isMemoryReadAllowedByCollaboration({
+            relPath,
+            gate: collaborationGate,
+          })
+        ) {
+          return jsonResult({
+            path: relPath,
+            text: "",
+            disabled: true,
+            denied: true,
+            error: "memory read blocked by collaboration scope gate",
+            debug: {
+              collaboration: buildCollaborationReadDebug({
+                gate: collaborationGate,
+                blockedPath: relPath,
+              }),
+            },
+          });
+        }
         if (requestedCorpus === "wiki") {
           const supplement = await getSupplementMemoryReadResult({
             relPath,

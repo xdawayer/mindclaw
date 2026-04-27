@@ -42,10 +42,35 @@ export type MemoryHostDreamCompletedEvent = {
   storageMode: "inline" | "separate" | "both";
 };
 
+export type MemoryHostCollaborationPublishedEvent = {
+  type: "memory.collaboration.published";
+  timestamp: string;
+  scope: "role_shared" | "space_shared";
+  path: string;
+  effectiveRole?: string;
+  spaceId?: string;
+};
+
+export type MemoryHostCollaborationHandoffEvent = {
+  type: "memory.collaboration.handoff";
+  timestamp: string;
+  correlationId: string;
+  depth: number;
+  status: "accepted" | "rejected";
+  artifactPath: string;
+  sourceRole: string;
+  targetRole: string;
+  effectiveAgentId: string;
+  reasonCode?: string;
+  spaceId?: string;
+};
+
 export type MemoryHostEvent =
   | MemoryHostRecallRecordedEvent
   | MemoryHostPromotionAppliedEvent
-  | MemoryHostDreamCompletedEvent;
+  | MemoryHostDreamCompletedEvent
+  | MemoryHostCollaborationPublishedEvent
+  | MemoryHostCollaborationHandoffEvent;
 
 export function resolveMemoryHostEventLogPath(workspaceDir: string): string {
   return path.join(workspaceDir, MEMORY_HOST_EVENT_LOG_RELATIVE_PATH);
