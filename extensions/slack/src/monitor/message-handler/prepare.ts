@@ -12,6 +12,7 @@ import {
   resolveEnvelopeFormatOptions,
   resolveInboundMentionDecision,
 } from "openclaw/plugin-sdk/channel-inbound";
+import { readPersistedCollaborationSessionMeta } from "openclaw/plugin-sdk/collaboration-runtime";
 import { resolveControlCommandGate } from "openclaw/plugin-sdk/command-auth";
 import { hasControlCommand } from "openclaw/plugin-sdk/command-auth";
 import { shouldHandleTextCommands } from "openclaw/plugin-sdk/command-auth";
@@ -43,6 +44,14 @@ import {
 } from "../allow-list.js";
 import { resolveSlackEffectiveAllowFrom } from "../auth.js";
 import { resolveSlackChannelConfig } from "../channel-config.js";
+import {
+  buildSlackCollaborationSessionMeta,
+  emitSlackCollaborationAudit,
+  isBotMessageBlockedByCollaboration,
+  persistSlackCollaborationHandoffArtifact,
+  persistSlackCollaborationAuditEvent,
+  resolveSlackCollaborationState,
+} from "../collaboration.runtime.js";
 import { stripSlackMentionsForCommandDetection } from "../commands.js";
 import {
   readSessionUpdatedAt,
@@ -115,6 +124,71 @@ type SlackRoutingContext = {
   sessionKey: string;
   historyKey: string;
 };
+
+function resolveSlackCollaborationWarningCodes(params: {
+  cfg: SlackMonitorContext["cfg"];
+  collaboration: NonNullable<PreparedSlackMessage["collaboration"]>;
+  legacyRoute: ReturnType<typeof resolveAgentRoute>;
+  conversation: Pick<SlackConversationContext, "channelConfig">;
+}): string[] {
+  const warningCodes = new Set(params.collaboration.audit.warningCodes);
+  const ownerAgentId = params.collaboration.explain.route?.ownerAgentId;
+  if (
+    ownerAgentId &&
+    params.legacyRoute.agentId !== ownerAgentId &&
+    params.legacyRoute.matchedBy.startsWith("binding.")
+  ) {
+    warningCodes.add("COLLAB_CONFLICT_BINDING_OVERRIDDEN");
+  }
+
+  const spaceId = params.collaboration.explain.space?.spaceId;
+  const collaborationSpace = spaceId ? params.cfg.collaboration?.spaces?.[spaceId] : undefined;
+  const channelConfig = params.conversation.channelConfig;
+  const expectedRequireMention = collaborationSpace?.slack?.requireMention;
+  const hasExplicitLegacyChannelPolicy =
+    Boolean(channelConfig?.matchKey) &&
+    (Boolean(channelConfig?.users?.length) ||
+      typeof channelConfig?.allowBots === "boolean" ||
+      (typeof expectedRequireMention === "boolean" &&
+        channelConfig.requireMention !== expectedRequireMention));
+  if (hasExplicitLegacyChannelPolicy) {
+    warningCodes.add("COLLAB_CONFLICT_SLACK_CHANNEL_POLICY_OVERRIDDEN");
+  }
+
+  return [...warningCodes];
+}
+
+function resolveSlackThreadSessionState(params: {
+  ctx: SlackMonitorContext;
+  route: ReturnType<typeof resolveAgentRoute>;
+  message: SlackMessageEvent;
+  isRoomish: boolean;
+  replyToMode: ReturnType<typeof resolveSlackReplyToMode>;
+  threadContext: ReturnType<typeof resolveSlackThreadContext>;
+}): Pick<SlackRoutingContext, "threadKeys" | "sessionKey" | "historyKey"> {
+  const { ctx, route, message, isRoomish, replyToMode, threadContext } = params;
+  const threadTs = threadContext.incomingThreadTs;
+  const isThreadReply = threadContext.isThreadReply;
+  const autoThreadId =
+    !isThreadReply && replyToMode === "all" && threadContext.messageTs
+      ? threadContext.messageTs
+      : undefined;
+  const roomThreadId = isThreadReply && threadTs ? threadTs : undefined;
+  const canonicalThreadId = isRoomish ? roomThreadId : isThreadReply ? threadTs : autoThreadId;
+  const threadKeys = resolveThreadSessionKeys({
+    baseSessionKey: route.sessionKey,
+    threadId: canonicalThreadId,
+    parentSessionKey: canonicalThreadId && ctx.threadInheritParent ? route.sessionKey : undefined,
+  });
+  const sessionKey = threadKeys.sessionKey;
+  const historyKey =
+    isThreadReply && ctx.threadHistoryScope === "thread" ? sessionKey : message.channel;
+  return {
+    threadKeys,
+    sessionKey,
+    historyKey,
+  };
+}
 
 async function resolveSlackConversationContext(params: {
   ctx: SlackMonitorContext;
@@ -191,6 +265,18 @@ async function authorizeSlackInboundMessage(params: {
     }
     if (!allowBots) {
       logVerbose(`slack: drop bot message ${message.bot_id ?? "unknown"} (allowBots=false)`);
+      return null;
+    }
+    if (
+      isBotMessageBlockedByCollaboration({
+        cfg: ctx.cfg,
+        channelId: message.channel,
+        isBotMessage: true,
+      })
+    ) {
+      logVerbose(
+        `slack: drop bot message ${message.bot_id ?? "unknown"} (collaboration allowBotMessages/allowBotAuthoredReentry)`,
+      );
       return null;
     }
   }
@@ -288,28 +374,14 @@ function resolveSlackRoutingContext(params: {
   const threadContext = resolveSlackThreadContext({ message, replyToMode });
   const threadTs = threadContext.incomingThreadTs;
   const isThreadReply = threadContext.isThreadReply;
-  // Keep true thread replies thread-scoped, but preserve channel-level sessions
-  // for top-level room turns when replyToMode is off.
-  // For DMs, preserve existing auto-thread behavior when replyToMode="all".
-  const autoThreadId =
-    !isThreadReply && replyToMode === "all" && threadContext.messageTs
-      ? threadContext.messageTs
-      : undefined;
-  // Only fork channel/group messages into thread-specific sessions when they are
-  // actual thread replies (thread_ts present, different from message ts).
-  // Top-level channel messages must stay on the per-channel session for continuity.
-  // Before this fix, every channel message used its own ts as threadId, creating
-  // isolated sessions per message (regression from #10686).
-  const roomThreadId = isThreadReply && threadTs ? threadTs : undefined;
-  const canonicalThreadId = isRoomish ? roomThreadId : isThreadReply ? threadTs : autoThreadId;
-  const threadKeys = resolveThreadSessionKeys({
-    baseSessionKey: route.sessionKey,
-    threadId: canonicalThreadId,
-    parentSessionKey: canonicalThreadId && ctx.threadInheritParent ? route.sessionKey : undefined,
+  const { threadKeys, sessionKey, historyKey } = resolveSlackThreadSessionState({
+    ctx,
+    route,
+    message,
+    isRoomish,
+    replyToMode,
+    threadContext,
   });
-  const sessionKey = threadKeys.sessionKey;
-  const historyKey =
-    isThreadReply && ctx.threadHistoryScope === "thread" ? sessionKey : message.channel;
 
   return {
     route,
@@ -362,18 +434,125 @@ export async function prepareSlackMessage(params: {
     isRoom,
     isRoomish,
   });
-  const {
-    route,
-    replyToMode,
-    threadContext,
+  const { route, replyToMode, threadContext, threadTs, isThreadReply } = routing;
+  const routePeer = {
+    kind: isDirectMessage ? "direct" : isRoom ? "channel" : "group",
+    id: isDirectMessage ? senderId : message.channel,
+  } as const;
+  const collaboration = resolveSlackCollaborationState({
+    cfg,
+    accountId: account.accountId,
+    senderUserId: senderId,
+    channelId: message.channel,
     threadTs,
-    isThreadReply,
-    threadKeys,
-    sessionKey,
-    historyKey,
-  } = routing;
+    peer: routePeer,
+    legacyRoute: route,
+    text: message.text ?? "",
+    matchAgentMention: (agentId) =>
+      matchesMentionWithExplicit({
+        text: message.text ?? "",
+        mentionRegexes: resolveCachedMentionRegexes(ctx, agentId),
+      }),
+    resolvePersistedSessionMeta: (collaborationRoute) => {
+      const resolved = resolveSlackThreadSessionState({
+        ctx,
+        route: collaborationRoute,
+        message,
+        isRoomish,
+        replyToMode,
+        threadContext,
+      });
+      return readPersistedCollaborationSessionMeta({
+        cfg,
+        agentId: collaborationRoute.agentId,
+        sessionKey: resolved.sessionKey,
+      });
+    },
+  });
+  const effectiveRoute = collaboration?.mode === "enforced" ? collaboration.effectiveRoute : route;
+  if (collaboration) {
+    collaboration.audit.warningCodes = resolveSlackCollaborationWarningCodes({
+      cfg,
+      collaboration,
+      legacyRoute: route,
+      conversation: {
+        channelConfig,
+      },
+    });
+  }
+  let { threadKeys, sessionKey, historyKey } = routing;
+  if (collaboration?.mode === "enforced") {
+    ({ threadKeys, sessionKey, historyKey } = resolveSlackThreadSessionState({
+      ctx,
+      route: effectiveRoute,
+      message,
+      isRoomish,
+      replyToMode,
+      threadContext,
+    }));
+  }
+  const collaborationParentSessionKey =
+    collaboration?.mode === "enforced" &&
+    collaboration.handoff?.status === "accepted" &&
+    collaboration.ownerRoute
+      ? resolveSlackThreadSessionState({
+          ctx,
+          route: collaboration.ownerRoute,
+          message,
+          isRoomish,
+          replyToMode,
+          threadContext,
+        }).sessionKey
+      : undefined;
+  if (collaboration?.mode === "enforced") {
+    try {
+      await persistSlackCollaborationHandoffArtifact({
+        cfg,
+        state: collaboration,
+        accountId: account.accountId,
+        senderUserId: senderId,
+        channelId: message.channel,
+        threadTs,
+        messageTs: message.ts,
+        text: message.text ?? "",
+      });
+    } catch (err) {
+      ctx.logger.warn(
+        {
+          error: formatErrorMessage(err),
+          accountId: account.accountId,
+          senderUserId: senderId,
+          channelId: message.channel,
+          ...(threadTs ? { threadTs } : {}),
+        },
+        "slack collaboration handoff artifact persist failed",
+      );
+    }
+  }
+  if (collaboration) {
+    try {
+      await persistSlackCollaborationAuditEvent({
+        cfg,
+        state: collaboration,
+      });
+    } catch (err) {
+      ctx.logger.warn(
+        {
+          error: formatErrorMessage(err),
+          accountId: account.accountId,
+          senderUserId: senderId,
+          channelId: message.channel,
+          ...(threadTs ? { threadTs } : {}),
+        },
+        "slack collaboration audit persist failed",
+      );
+    }
+  }
+  if (collaboration) {
+    emitSlackCollaborationAudit(ctx.logger, collaboration);
+  }
 
-  const mentionRegexes = resolveCachedMentionRegexes(ctx, route.agentId);
+  const mentionRegexes = resolveCachedMentionRegexes(ctx, effectiveRoute.agentId);
   const hasAnyMention = /<@[^>]+>/.test(message.text ?? "");
   const explicitlyMentioned = Boolean(
     ctx.botUserId && message.text?.includes(`<@${ctx.botUserId}>`),
@@ -565,7 +744,7 @@ export async function prepareSlackMessage(params: {
   }
   const { rawBody, effectiveDirectMedia } = resolvedMessageContent;
 
-  const ackReaction = resolveAckReaction(cfg, route.agentId, {
+  const ackReaction = resolveAckReaction(cfg, effectiveRoute.agentId, {
     channel: "slack",
     accountId: account.accountId,
   });
@@ -639,7 +818,7 @@ export async function prepareSlackMessage(params: {
       : "";
   const textWithId = `${rawBody}\n[slack message id: ${message.ts} channel: ${message.channel}${threadInfo}]`;
   const storePath = resolveStorePath(ctx.cfg.session?.store, {
-    agentId: route.agentId,
+    agentId: effectiveRoute.agentId,
   });
   const envelopeOptions = resolveEnvelopeFormatOptions(ctx.cfg);
   const previousTimestamp = readSessionUpdatedAt({
@@ -686,6 +865,10 @@ export async function prepareSlackMessage(params: {
     channelInfo,
     channelConfig,
   });
+  const effectiveGroupSystemPrompt =
+    collaboration?.mode === "enforced" && collaboration.systemPrompt
+      ? [groupSystemPrompt, collaboration.systemPrompt].filter(Boolean).join("\n\n")
+      : groupSystemPrompt;
 
   const {
     threadStarterBody,
@@ -713,6 +896,23 @@ export async function prepareSlackMessage(params: {
   // Use direct media (including forwarded attachment media) if available, else thread starter media
   const effectiveMedia = effectiveDirectMedia ?? threadStarterMedia;
   const firstMedia = effectiveMedia?.[0];
+  const sessionMetaPatch =
+    collaboration || collaborationParentSessionKey
+      ? {
+          ...(collaborationParentSessionKey && collaboration?.handoff?.status === "accepted"
+            ? {
+                spawnedBy: collaborationParentSessionKey,
+                parentSessionKey: collaborationParentSessionKey,
+                spawnDepth: collaboration.handoff.depth,
+              }
+            : {}),
+          ...(collaboration
+            ? {
+                collaboration: buildSlackCollaborationSessionMeta(collaboration),
+              }
+            : {}),
+        }
+      : undefined;
 
   const inboundHistory =
     isRoomish && ctx.historyLimit > 0
@@ -734,12 +934,12 @@ export async function prepareSlackMessage(params: {
     From: slackFrom,
     To: slackTo,
     SessionKey: sessionKey,
-    AccountId: route.accountId,
+    AccountId: effectiveRoute.accountId,
     ChatType: isDirectMessage ? "direct" : "channel",
     ConversationLabel: envelopeFrom,
     GroupSubject: isRoomish ? roomLabel : undefined,
     GroupSpace: ctx.teamId || undefined,
-    GroupSystemPrompt: groupSystemPrompt,
+    GroupSystemPrompt: effectiveGroupSystemPrompt,
     UntrustedContext: untrustedChannelMetadata ? [untrustedChannelMetadata] : undefined,
     SenderName: senderName,
     SenderId: senderId,
@@ -749,7 +949,7 @@ export async function prepareSlackMessage(params: {
     ReplyToId: threadContext.replyToId,
     // Preserve thread context for routed tool notifications.
     MessageThreadId: threadContext.messageThreadId,
-    ParentSessionKey: threadKeys.parentSessionKey,
+    ParentSessionKey: collaborationParentSessionKey ?? threadKeys.parentSessionKey,
     // Only include thread starter body for NEW sessions (existing sessions already have it in their transcript)
     ThreadStarterBody: !threadSessionPreviousTimestamp ? threadStarterBody : undefined,
     ThreadHistoryBody: threadHistoryBody,
@@ -786,12 +986,13 @@ export async function prepareSlackMessage(params: {
     storePath,
     sessionKey,
     ctx: ctxPayload,
+    sessionMetaPatch,
     updateLastRoute: isDirectMessage
       ? {
-          sessionKey: route.mainSessionKey,
+          sessionKey: effectiveRoute.mainSessionKey,
           channel: "slack",
           to: `user:${message.user}`,
-          accountId: route.accountId,
+          accountId: effectiveRoute.accountId,
           threadId: threadContext.messageThreadId,
           mainDmOwnerPin:
             pinnedMainDmOwner && message.user
@@ -836,7 +1037,8 @@ export async function prepareSlackMessage(params: {
     ctx,
     account,
     message,
-    route,
+    route: effectiveRoute,
+    ...(collaboration ? { collaboration } : {}),
     channelConfig,
     replyTarget,
     ctxPayload,

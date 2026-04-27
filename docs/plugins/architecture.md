@@ -1171,6 +1171,7 @@ authoring plugins:
   `openclaw/plugin-sdk/approval-handler-adapter-runtime`,
   `openclaw/plugin-sdk/approval-handler-runtime`,
   `openclaw/plugin-sdk/approval-runtime`,
+  `openclaw/plugin-sdk/collaboration-runtime`,
   `openclaw/plugin-sdk/config-runtime`,
   `openclaw/plugin-sdk/infra-runtime`,
   `openclaw/plugin-sdk/agent-runtime`,

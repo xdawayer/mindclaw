@@ -3,6 +3,7 @@ import type { ResolvedAgentRoute } from "openclaw/plugin-sdk/routing";
 import type { ResolvedSlackAccount } from "../../accounts.js";
 import type { SlackMessageEvent } from "../../types.js";
 import type { SlackChannelConfigResolved } from "../channel-config.js";
+import type { SlackCollaborationState } from "../collaboration.runtime.js";
 import type { SlackMonitorContext } from "../context.js";
 
 export type PreparedSlackMessage = {
@@ -10,6 +11,7 @@ export type PreparedSlackMessage = {
   account: ResolvedSlackAccount;
   message: SlackMessageEvent;
   route: ResolvedAgentRoute;
+  collaboration?: SlackCollaborationState;
   channelConfig: SlackChannelConfigResolved | null;
   replyTarget: string;
   ctxPayload: FinalizedMsgContext;
