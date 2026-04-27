@@ -13,6 +13,8 @@ describe("command-startup-policy", () => {
     expect(shouldBypassConfigGuardForCommandPath(["backup", "create"])).toBe(true);
     expect(shouldBypassConfigGuardForCommandPath(["config", "validate"])).toBe(true);
     expect(shouldBypassConfigGuardForCommandPath(["config", "schema"])).toBe(true);
+    expect(shouldBypassConfigGuardForCommandPath(["collaboration", "validate"])).toBe(true);
+    expect(shouldBypassConfigGuardForCommandPath(["collaboration", "explain"])).toBe(true);
     expect(shouldBypassConfigGuardForCommandPath(["status"])).toBe(false);
   });
 

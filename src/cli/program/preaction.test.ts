@@ -171,6 +171,16 @@ describe("registerPreActionHooks", () => {
       .option("--json")
       .action(() => {});
     config.command("schema").action(() => {});
+    const collaboration = program.command("collaboration");
+    collaboration
+      .command("validate")
+      .option("--json")
+      .action(() => {});
+    collaboration
+      .command("explain")
+      .requiredOption("--user <slackUserId>")
+      .option("--json")
+      .action(() => {});
     registerPreActionHooks(program, "9.9.9-test");
     return program;
   }
@@ -442,6 +452,24 @@ describe("registerPreActionHooks", () => {
     await runPreAction({
       parseArgv: ["config", "schema"],
       processArgv: ["node", "openclaw", "config", "schema"],
+    });
+
+    expect(ensureConfigReadyMock).not.toHaveBeenCalled();
+  });
+
+  it("bypasses config guard for collaboration validate", async () => {
+    await runPreAction({
+      parseArgv: ["collaboration", "validate"],
+      processArgv: ["node", "openclaw", "collaboration", "validate"],
+    });
+
+    expect(ensureConfigReadyMock).not.toHaveBeenCalled();
+  });
+
+  it("bypasses config guard for collaboration explain", async () => {
+    await runPreAction({
+      parseArgv: ["collaboration", "explain"],
+      processArgv: ["node", "openclaw", "collaboration", "explain", "--user", "U111PM001"],
     });
 
     expect(ensureConfigReadyMock).not.toHaveBeenCalled();
