@@ -29,6 +29,7 @@
   "approval-native-runtime",
   "approval-reply-runtime",
   "approval-runtime",
+  "collaboration-runtime",
   "config-runtime",
   "config-schema",
   "reply-runtime",

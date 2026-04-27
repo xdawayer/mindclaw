@@ -173,6 +173,10 @@
       "types": "./dist/plugin-sdk/approval-runtime.d.ts",
       "default": "./dist/plugin-sdk/approval-runtime.js"
     },
+    "./plugin-sdk/collaboration-runtime": {
+      "types": "./dist/plugin-sdk/collaboration-runtime.d.ts",
+      "default": "./dist/plugin-sdk/collaboration-runtime.js"
+    },
     "./plugin-sdk/config-runtime": {
       "types": "./dist/plugin-sdk/config-runtime.d.ts",
       "default": "./dist/plugin-sdk/config-runtime.js"
