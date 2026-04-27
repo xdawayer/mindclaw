@@ -1,5 +1,6 @@
 import type { MsgContext } from "../auto-reply/templating.js";
 import type { GroupKeyResolution } from "../config/sessions/types.js";
+import type { SessionEntry } from "../config/sessions/types.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import type { InboundLastRouteUpdate } from "./session.types.js";
 export type { InboundLastRouteUpdate, RecordInboundSession } from "./session.types.js";
@@ -34,6 +35,7 @@ export async function recordInboundSession(params: {
   ctx: MsgContext;
   groupResolution?: GroupKeyResolution | null;
   createIfMissing?: boolean;
+  sessionMetaPatch?: Partial<SessionEntry>;
   updateLastRoute?: InboundLastRouteUpdate;
   onRecordError: (err: unknown) => void;
 }): Promise<void> {
@@ -47,6 +49,7 @@ export async function recordInboundSession(params: {
       ctx,
       groupResolution,
       createIfMissing,
+      sessionMetaPatch: params.sessionMetaPatch,
     })
     .catch(params.onRecordError);
 

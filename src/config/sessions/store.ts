@@ -669,6 +669,7 @@ export async function recordSessionMetaFromInbound(params: {
   ctx: MsgContext;
   groupResolution?: import("./types.js").GroupKeyResolution | null;
   createIfMissing?: boolean;
+  sessionMetaPatch?: Partial<SessionEntry>;
 }): Promise<SessionEntry | null> {
   const { storePath, sessionKey, ctx } = params;
   const createIfMissing = params.createIfMissing ?? true;
@@ -683,7 +684,14 @@ export async function recordSessionMetaFromInbound(params: {
         existing,
         groupResolution: params.groupResolution,
       });
-      if (!patch) {
+      const combinedPatch =
+        patch || params.sessionMetaPatch
+          ? {
+              ...(patch ?? {}),
+              ...(params.sessionMetaPatch ?? {}),
+            }
+          : null;
+      if (!combinedPatch) {
         if (existing && resolved.legacyKeys.length > 0) {
           store[resolved.normalizedKey] = existing;
           for (const legacyKey of resolved.legacyKeys) {
@@ -698,8 +706,8 @@ export async function recordSessionMetaFromInbound(params: {
       const next = existing
         ? // Inbound metadata updates must not refresh activity timestamps;
           // idle reset evaluation relies on updatedAt from actual session turns.
-          mergeSessionEntryPreserveActivity(existing, patch)
-        : mergeSessionEntry(existing, patch);
+          mergeSessionEntryPreserveActivity(existing, combinedPatch)
+        : mergeSessionEntry(existing, combinedPatch);
       store[resolved.normalizedKey] = next;
       for (const legacyKey of resolved.legacyKeys) {
         delete store[legacyKey];

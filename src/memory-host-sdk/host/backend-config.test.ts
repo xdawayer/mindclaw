@@ -446,6 +446,50 @@ describe("memorySearch.extraPaths integration", () => {
     expect(paths).toContain(resolveComparablePath("/agent-only"));
   });
 
+  it("adds collaboration role and space paths to QMD collections", () => {
+    const cfg = {
+      memory: { backend: "qmd" },
+      agents: {
+        defaults: {
+          workspace: "/workspace/root",
+        },
+        list: [{ id: "product", default: true }],
+      },
+      collaboration: {
+        version: 1,
+        identities: {
+          users: {},
+        },
+        bots: {
+          product_bot: {
+            slackAccountId: "product",
+            agentId: "product",
+            role: "product",
+          },
+        },
+        roles: {
+          product: {
+            defaultAgentId: "product",
+            defaultBotId: "product_bot",
+            permissions: ["memory.read.role_shared", "memory.read.space_shared"],
+          },
+        },
+        spaces: {
+          project_main: {
+            kind: "project",
+            ownerRole: "product",
+            memberRoles: ["product"],
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    const paths = resolveCustomCollectionPathsForAgent(cfg, "product");
+
+    expect(paths).toContain(resolveComparablePath("collaboration/role_shared/product"));
+    expect(paths).toContain(resolveComparablePath("collaboration/space_shared/project_main"));
+  });
+
   it("keeps unnamed extra paths agent-scoped even when they resolve outside the workspace", () => {
     const cfg = {
       memory: { backend: "qmd" },

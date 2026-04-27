@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type, type TSchema } from "@sinclair/typebox";
 import {
   listMemoryCorpusSupplements,
   resolveMemorySearchConfig,
@@ -101,7 +101,7 @@ export function createMemoryTool(params: {
   label: string;
   name: string;
   description: string;
-  parameters: typeof MemorySearchSchema | typeof MemoryGetSchema;
+  parameters: TSchema;
   execute: (ctx: { cfg: OpenClawConfig; agentId: string }) => AnyAgentTool["execute"];
 }): AnyAgentTool | null {
   const ctx = resolveMemoryToolContext(params.options);

@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { resolveCollaborationMemoryIndexPaths } from "../collaboration/memory-paths.js";
 import type { OpenClawConfig, MemorySearchConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
 import type { SecretInput } from "../config/types.secrets.js";
@@ -142,6 +143,7 @@ function resolveStorePath(agentId: string, raw?: string): string {
 }
 
 function mergeConfig(
+  cfg: OpenClawConfig,
   defaults: MemorySearchConfig | undefined,
   overrides: MemorySearchConfig | undefined,
   agentId: string,
@@ -200,6 +202,7 @@ function mergeConfig(
   const rawPaths = [...(defaults?.extraPaths ?? []), ...(overrides?.extraPaths ?? [])]
     .map((value) => value.trim())
     .filter(Boolean);
+  rawPaths.push(...resolveCollaborationMemoryIndexPaths({ cfg, agentId }));
   const extraPaths = Array.from(new Set(rawPaths));
   const multimodal = normalizeMemoryMultimodalSettings({
     enabled: overrides?.multimodal?.enabled ?? defaults?.multimodal?.enabled,
@@ -381,7 +384,7 @@ export function resolveMemorySearchConfig(
 ): ResolvedMemorySearchConfig | null {
   const defaults = cfg.agents?.defaults?.memorySearch;
   const overrides = resolveAgentConfig(cfg, agentId)?.memorySearch;
-  const resolved = mergeConfig(defaults, overrides, agentId);
+  const resolved = mergeConfig(cfg, defaults, overrides, agentId);
   if (!resolved.enabled) {
     return null;
   }
