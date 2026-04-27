@@ -14,6 +14,7 @@ import {
   resolveChannelStreamingNativeTransport,
   resolveChannelStreamingPreviewToolProgress,
 } from "openclaw/plugin-sdk/channel-streaming";
+import { registerCollaborationHandoffRun } from "openclaw/plugin-sdk/collaboration-runtime";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { resolveAgentOutboundIdentity } from "openclaw/plugin-sdk/outbound-runtime";
 import { clearHistoryEntriesIfEnabled } from "openclaw/plugin-sdk/reply-history";
@@ -208,7 +209,54 @@ export async function resolveSlackStreamRecipientTeamId(params: {
   return params.fallbackTeamId;
 }
 
+function shouldDetachCollaborationHandoffDispatch(prepared: PreparedSlackMessage): boolean {
+  return (
+    prepared.collaboration?.mode === "enforced" &&
+    prepared.collaboration.handoff?.status === "accepted" &&
+    Boolean(prepared.collaboration.ownerRoute)
+  );
+}
+
+function isSlackRetryableInboundError(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== "object" || depth > 6) {
+    return false;
+  }
+  if ((error as { name?: unknown }).name === "SlackRetryableInboundError") {
+    return true;
+  }
+  // Walk the standard ES `cause` chain so retryable errors wrapped by
+  // instrumentation/middleware still release the seen-message lock.
+  return isSlackRetryableInboundError((error as { cause?: unknown }).cause, depth + 1);
+}
+
+function scheduleDetachedCollaborationHandoffDispatch(prepared: PreparedSlackMessage): void {
+  const runtime = prepared.ctx.runtime;
+  queueMicrotask(() => {
+    void dispatchPreparedSlackMessageInline(prepared).catch((error) => {
+      runtime.error?.(
+        danger(`slack detached collaboration handoff failed: ${formatErrorMessage(error)}`),
+      );
+      // Retryable errors must release the seen-message lock so the next Slack
+      // re-delivery is processed; otherwise a transient failure silently drops
+      // the handoff because the inbound dedupe cache still considers the event
+      // handled. Walk by name + cause chain to stay tolerant of wrapped errors
+      // and duplicate module instances under vitest mocks.
+      if (isSlackRetryableInboundError(error)) {
+        prepared.ctx.releaseSeenMessage?.(prepared.message.channel, prepared.message.ts);
+      }
+    });
+  });
+}
+
 export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessage) {
+  if (shouldDetachCollaborationHandoffDispatch(prepared)) {
+    scheduleDetachedCollaborationHandoffDispatch(prepared);
+    return;
+  }
+  await dispatchPreparedSlackMessageInline(prepared);
+}
+
+async function dispatchPreparedSlackMessageInline(prepared: PreparedSlackMessage) {
   const { ctx, account, message, route } = prepared;
   const cfg = ctx.cfg;
   const runtime = ctx.runtime;
@@ -777,6 +825,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
   let dispatchError: unknown;
   let queuedFinal = false;
   let counts: { final?: number; block?: number } = {};
+  const pendingCollaborationRunRegistrations: Promise<unknown>[] = [];
   try {
     const result = await dispatchInboundMessage({
       ctx: prepared.ctxPayload,
@@ -848,6 +897,31 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
           }
           pushPreviewToolProgress(payload.summary ?? payload.title ?? "patch applied");
         },
+        onAgentRunStart:
+          prepared.collaboration?.mode === "enforced" &&
+          prepared.collaboration.handoff?.status === "accepted" &&
+          prepared.collaboration.ownerRoute
+            ? (runId) => {
+                pendingCollaborationRunRegistrations.push(
+                  registerCollaborationHandoffRun({
+                    cfg,
+                    runId,
+                    agentId: prepared.route.agentId,
+                    ownerSessionKey: prepared.collaboration!.ownerRoute!.sessionKey,
+                    childSessionKey: prepared.route.sessionKey,
+                    correlationId: prepared.collaboration!.handoff!.correlationId,
+                    sourceRole: prepared.collaboration!.handoff!.sourceRole,
+                    targetRole: prepared.collaboration!.handoff!.targetRole,
+                  }).catch((error) => {
+                    runtime.error?.(
+                      danger(
+                        `slack collaboration handoff run registration failed: ${formatErrorMessage(error)}`,
+                      ),
+                    );
+                  }),
+                );
+              }
+            : undefined,
       },
     });
     queuedFinal = result.queuedFinal;
@@ -856,6 +930,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
     dispatchError = err;
   } finally {
     await draftStream?.discardPending();
+    await Promise.allSettled(pendingCollaborationRunRegistrations);
     markDispatchIdle();
   }
 

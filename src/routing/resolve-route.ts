@@ -63,6 +63,9 @@ export type ResolvedAgentRoute = {
     | "binding.team"
     | "binding.account"
     | "binding.channel"
+    | "collaboration.dm"
+    | "collaboration.handoff"
+    | "collaboration.space"
     | "default";
 };
 
