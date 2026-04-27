@@ -17908,6 +17908,797 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
         description:
           "Top-level binding rules for routing and persistent ACP conversation ownership. Use type=route for normal routing and type=acp for persistent ACP harness bindings.",
       },
+      collaboration: {
+        type: "object",
+        properties: {
+          version: {
+            type: "number",
+            const: 1,
+          },
+          mode: {
+            type: "string",
+            enum: ["disabled", "shadow", "enforced"],
+          },
+          identities: {
+            type: "object",
+            properties: {
+              users: {
+                type: "object",
+                propertyNames: {
+                  type: "string",
+                  minLength: 1,
+                },
+                additionalProperties: {
+                  type: "object",
+                  properties: {
+                    identityId: {
+                      type: "string",
+                      pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                    },
+                    displayName: {
+                      type: "string",
+                    },
+                    roles: {
+                      minItems: 1,
+                      type: "array",
+                      items: {
+                        type: "string",
+                        pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                      },
+                    },
+                    defaultRole: {
+                      type: "string",
+                      pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                    },
+                    scheduleDelivery: {
+                      type: "object",
+                      properties: {
+                        preferDm: {
+                          type: "boolean",
+                        },
+                        fallbackBotId: {
+                          type: "string",
+                          pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                        },
+                      },
+                      additionalProperties: false,
+                    },
+                  },
+                  required: ["identityId", "roles"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["users"],
+            additionalProperties: false,
+          },
+          bots: {
+            type: "object",
+            propertyNames: {
+              type: "string",
+              pattern: "^[a-z][a-z0-9_-]{1,63}$",
+            },
+            additionalProperties: {
+              type: "object",
+              properties: {
+                slackAccountId: {
+                  type: "string",
+                  minLength: 1,
+                },
+                agentId: {
+                  type: "string",
+                  minLength: 1,
+                },
+                role: {
+                  type: "string",
+                  pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                },
+                displayName: {
+                  type: "string",
+                },
+                identityStyle: {
+                  type: "string",
+                  enum: ["role", "agent"],
+                },
+                allowedSpaces: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                  },
+                },
+                canInitiateHandoffs: {
+                  type: "boolean",
+                },
+                canReceiveHandoffs: {
+                  type: "boolean",
+                },
+              },
+              required: ["slackAccountId", "agentId", "role"],
+              additionalProperties: false,
+            },
+          },
+          roles: {
+            type: "object",
+            propertyNames: {
+              type: "string",
+              pattern: "^[a-z][a-z0-9_-]{1,63}$",
+            },
+            additionalProperties: {
+              type: "object",
+              properties: {
+                defaultAgentId: {
+                  type: "string",
+                  minLength: 1,
+                },
+                defaultBotId: {
+                  type: "string",
+                  pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                },
+                permissions: {
+                  minItems: 1,
+                  type: "array",
+                  items: {
+                    type: "string",
+                    enum: [
+                      "memory.read.private",
+                      "memory.read.role_shared",
+                      "memory.read.space_shared",
+                      "memory.write.private",
+                      "memory.publish.role_shared",
+                      "memory.publish.space_shared",
+                      "schedule.read",
+                      "schedule.create",
+                      "schedule.edit",
+                      "schedule.delete",
+                      "agent.handoff",
+                      "agent.mention",
+                      "exec.approve",
+                      "config.edit",
+                    ],
+                  },
+                },
+                memoryPolicy: {
+                  type: "object",
+                  properties: {
+                    defaultWriteScope: {
+                      type: "string",
+                      enum: ["private", "role_shared", "space_shared"],
+                    },
+                    readableScopes: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: ["private", "role_shared", "space_shared"],
+                      },
+                    },
+                    publishableScopes: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: ["role_shared", "space_shared"],
+                      },
+                    },
+                  },
+                  additionalProperties: false,
+                },
+                schedulePolicy: {
+                  type: "object",
+                  properties: {
+                    canCreate: {
+                      type: "boolean",
+                    },
+                    canEdit: {
+                      type: "boolean",
+                    },
+                    canDelete: {
+                      type: "boolean",
+                    },
+                    allowedAudienceKinds: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: ["identity", "role", "space"],
+                      },
+                    },
+                    allowPrivateDigest: {
+                      type: "boolean",
+                    },
+                  },
+                  additionalProperties: false,
+                },
+              },
+              required: ["defaultAgentId", "defaultBotId", "permissions"],
+              additionalProperties: false,
+            },
+          },
+          spaces: {
+            type: "object",
+            propertyNames: {
+              type: "string",
+              pattern: "^[a-z][a-z0-9_-]{1,63}$",
+            },
+            additionalProperties: {
+              type: "object",
+              properties: {
+                kind: {
+                  type: "string",
+                  enum: ["dm", "role", "project"],
+                },
+                displayName: {
+                  type: "string",
+                },
+                ownerRole: {
+                  type: "string",
+                  pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                },
+                memberRoles: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                  },
+                },
+                slack: {
+                  type: "object",
+                  properties: {
+                    channels: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                    users: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                    requireMention: {
+                      type: "boolean",
+                    },
+                    replyThreadMode: {
+                      type: "string",
+                      enum: ["owner", "free", "strict_owner"],
+                    },
+                    allowBotMessages: {
+                      type: "string",
+                      enum: ["none", "handoff_only"],
+                    },
+                  },
+                  additionalProperties: false,
+                },
+                memory: {
+                  type: "object",
+                  properties: {
+                    sharedScopeId: {
+                      type: "string",
+                    },
+                    readableByRoles: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                      },
+                    },
+                    writableByRoles: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                      },
+                    },
+                    publishRequires: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: [
+                          "memory.read.private",
+                          "memory.read.role_shared",
+                          "memory.read.space_shared",
+                          "memory.write.private",
+                          "memory.publish.role_shared",
+                          "memory.publish.space_shared",
+                          "schedule.read",
+                          "schedule.create",
+                          "schedule.edit",
+                          "schedule.delete",
+                          "agent.handoff",
+                          "agent.mention",
+                          "exec.approve",
+                          "config.edit",
+                        ],
+                      },
+                    },
+                  },
+                  additionalProperties: false,
+                },
+                handoffs: {
+                  type: "object",
+                  properties: {
+                    allowedTargets: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                      },
+                    },
+                    requireExplicitMention: {
+                      type: "boolean",
+                    },
+                    maxDepth: {
+                      type: "integer",
+                      exclusiveMinimum: 0,
+                      maximum: 9007199254740991,
+                    },
+                  },
+                  additionalProperties: false,
+                },
+                schedules: {
+                  type: "object",
+                  properties: {
+                    allowed: {
+                      type: "boolean",
+                    },
+                    defaultDestinations: {
+                      type: "array",
+                      items: {
+                        oneOf: [
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                type: "string",
+                                const: "slack_dm",
+                              },
+                              identityId: {
+                                type: "string",
+                                pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                              },
+                              roleId: {
+                                type: "string",
+                                pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                              },
+                            },
+                            required: ["kind"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                type: "string",
+                                const: "slack_channel",
+                              },
+                              channelId: {
+                                type: "string",
+                                minLength: 1,
+                              },
+                            },
+                            required: ["kind", "channelId"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                type: "string",
+                                const: "space_default",
+                              },
+                              spaceId: {
+                                type: "string",
+                                pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                              },
+                            },
+                            required: ["kind", "spaceId"],
+                            additionalProperties: false,
+                          },
+                        ],
+                      },
+                    },
+                    quietHours: {
+                      type: "object",
+                      properties: {
+                        tz: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        start: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        end: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                      },
+                      required: ["tz", "start", "end"],
+                      additionalProperties: false,
+                    },
+                  },
+                  additionalProperties: false,
+                },
+              },
+              required: ["kind"],
+              additionalProperties: false,
+            },
+          },
+          memory: {
+            type: "object",
+            properties: {
+              scopes: {
+                type: "object",
+                properties: {
+                  private: {
+                    type: "object",
+                    properties: {
+                      default: {
+                        type: "boolean",
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                  role_shared: {
+                    type: "object",
+                    properties: {
+                      partitionBy: {
+                        type: "string",
+                        const: "role",
+                      },
+                    },
+                    required: ["partitionBy"],
+                    additionalProperties: false,
+                  },
+                  space_shared: {
+                    type: "object",
+                    properties: {
+                      partitionBy: {
+                        type: "string",
+                        const: "space",
+                      },
+                    },
+                    required: ["partitionBy"],
+                    additionalProperties: false,
+                  },
+                },
+                additionalProperties: false,
+              },
+              rules: {
+                type: "object",
+                properties: {
+                  requireProvenance: {
+                    type: "boolean",
+                  },
+                  requireExplicitPublish: {
+                    type: "boolean",
+                  },
+                  denyGlobalSearchByDefault: {
+                    type: "boolean",
+                  },
+                },
+                additionalProperties: false,
+              },
+            },
+            additionalProperties: false,
+          },
+          routing: {
+            type: "object",
+            properties: {
+              ownerSelection: {
+                type: "object",
+                properties: {
+                  dm: {
+                    type: "string",
+                    const: "identity_default_role",
+                  },
+                  role: {
+                    type: "string",
+                    const: "space_owner_role",
+                  },
+                  project: {
+                    type: "string",
+                    const: "space_owner_role",
+                  },
+                },
+                additionalProperties: false,
+              },
+              mentionRouting: {
+                type: "object",
+                properties: {
+                  explicitAgentMention: {
+                    type: "boolean",
+                  },
+                  fallbackToOwner: {
+                    type: "boolean",
+                  },
+                },
+                additionalProperties: false,
+              },
+              handoff: {
+                type: "object",
+                properties: {
+                  mode: {
+                    type: "string",
+                    const: "structured",
+                  },
+                  dedupeWindow: {
+                    type: "string",
+                    minLength: 1,
+                  },
+                  maxDepth: {
+                    type: "integer",
+                    exclusiveMinimum: 0,
+                    maximum: 9007199254740991,
+                  },
+                  allowBotAuthoredReentry: {
+                    type: "boolean",
+                  },
+                },
+                additionalProperties: false,
+              },
+            },
+            additionalProperties: false,
+          },
+          schedules: {
+            type: "object",
+            properties: {
+              jobs: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: {
+                      type: "string",
+                      pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                    },
+                    enabled: {
+                      type: "boolean",
+                    },
+                    audience: {
+                      oneOf: [
+                        {
+                          type: "object",
+                          properties: {
+                            kind: {
+                              type: "string",
+                              const: "identity",
+                            },
+                            id: {
+                              type: "string",
+                              pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                            },
+                          },
+                          required: ["kind", "id"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            kind: {
+                              type: "string",
+                              const: "role",
+                            },
+                            id: {
+                              type: "string",
+                              pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                            },
+                          },
+                          required: ["kind", "id"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            kind: {
+                              type: "string",
+                              const: "space",
+                            },
+                            id: {
+                              type: "string",
+                              pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                            },
+                          },
+                          required: ["kind", "id"],
+                          additionalProperties: false,
+                        },
+                      ],
+                    },
+                    sourceSpaces: {
+                      minItems: 1,
+                      type: "array",
+                      items: {
+                        type: "string",
+                        pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                      },
+                    },
+                    at: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    every: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    cron: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    tz: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    delivery: {
+                      minItems: 1,
+                      type: "array",
+                      items: {
+                        oneOf: [
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                type: "string",
+                                const: "slack_dm",
+                              },
+                              identityId: {
+                                type: "string",
+                                pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                              },
+                              roleId: {
+                                type: "string",
+                                pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                              },
+                            },
+                            required: ["kind"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                type: "string",
+                                const: "slack_channel",
+                              },
+                              channelId: {
+                                type: "string",
+                                minLength: 1,
+                              },
+                            },
+                            required: ["kind", "channelId"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              kind: {
+                                type: "string",
+                                const: "space_default",
+                              },
+                              spaceId: {
+                                type: "string",
+                                pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                              },
+                            },
+                            required: ["kind", "spaceId"],
+                            additionalProperties: false,
+                          },
+                        ],
+                      },
+                    },
+                    memoryReadScopes: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: ["private", "role_shared", "space_shared"],
+                      },
+                    },
+                    template: {
+                      type: "string",
+                    },
+                    systemPrompt: {
+                      type: "string",
+                    },
+                    ownerRole: {
+                      type: "string",
+                      pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                    },
+                  },
+                  required: ["id", "audience", "sourceSpaces", "delivery"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["jobs"],
+            additionalProperties: false,
+          },
+          approvals: {
+            type: "object",
+            properties: {
+              policies: {
+                type: "object",
+                propertyNames: {
+                  type: "string",
+                  minLength: 1,
+                },
+                additionalProperties: {
+                  type: "object",
+                  properties: {
+                    when: {
+                      minItems: 1,
+                      type: "array",
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                    approverRoles: {
+                      minItems: 1,
+                      type: "array",
+                      items: {
+                        type: "string",
+                        pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                      },
+                    },
+                    delivery: {
+                      minItems: 1,
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: ["dm", "origin_thread"],
+                      },
+                    },
+                    visibility: {
+                      type: "string",
+                      enum: ["summary_only", "full_context"],
+                    },
+                    agentFilter: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                    spaceFilter: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        pattern: "^[a-z][a-z0-9_-]{1,63}$",
+                      },
+                    },
+                  },
+                  required: ["when", "approverRoles", "delivery"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["policies"],
+            additionalProperties: false,
+          },
+          audit: {
+            type: "object",
+            properties: {
+              enabled: {
+                type: "boolean",
+              },
+              retainDays: {
+                type: "integer",
+                exclusiveMinimum: 0,
+                maximum: 9007199254740991,
+              },
+              redactBodies: {
+                type: "boolean",
+              },
+              explainMode: {
+                type: "boolean",
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        required: ["version", "identities", "bots", "roles", "spaces"],
+        additionalProperties: false,
+      },
       broadcast: {
         type: "object",
         properties: {

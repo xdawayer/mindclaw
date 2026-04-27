@@ -12,6 +12,7 @@ import {
 import { ToolsSchema } from "./zod-schema.agent-runtime.js";
 import { AgentsSchema, AudioSchema, BindingsSchema, BroadcastSchema } from "./zod-schema.agents.js";
 import { ApprovalsSchema } from "./zod-schema.approvals.js";
+import { CollaborationConfigSchema } from "./zod-schema.collaboration.js";
 import {
   HexColorSchema,
   ModelsConfigSchema,
@@ -507,6 +508,7 @@ export const OpenClawSchema = z
     agents: AgentsSchema,
     tools: ToolsSchema,
     bindings: BindingsSchema,
+    collaboration: CollaborationConfigSchema.optional(),
     broadcast: BroadcastSchema,
     audio: AudioSchema,
     media: z
