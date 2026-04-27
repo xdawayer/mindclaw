@@ -132,4 +132,88 @@ describe("recordInboundSession", () => {
       senderRecipient: "9999",
     });
   });
+
+  it("forwards explicit session metadata patches when recording inbound state", async () => {
+    await recordInboundSession({
+      storePath: "/tmp/openclaw-session-store.json",
+      sessionKey: "agent:main:demo-channel:1234:thread:42",
+      ctx,
+      sessionMetaPatch: {
+        collaboration: {
+          mode: "enforced",
+          managedSurface: true,
+          effectiveRole: "ops",
+          readableScopes: ["role_shared"],
+        },
+      },
+      onRecordError: vi.fn(),
+    });
+
+    expect(recordSessionMetaFromInboundMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionKey: "agent:main:demo-channel:1234:thread:42",
+        sessionMetaPatch: {
+          collaboration: {
+            mode: "enforced",
+            managedSurface: true,
+            effectiveRole: "ops",
+            readableScopes: ["role_shared"],
+          },
+        },
+      }),
+    );
+  });
+
+  it("forwards collaboration handoff correlation and artifact metadata", async () => {
+    await recordInboundSession({
+      storePath: "/tmp/openclaw-session-store.json",
+      sessionKey: "agent:ops:slack:channel:c123",
+      ctx,
+      sessionMetaPatch: {
+        collaboration: {
+          mode: "enforced",
+          managedSurface: true,
+          spaceId: "project_main",
+          effectiveRole: "ops",
+          readableScopes: ["private", "role_shared"],
+          publishableScopes: ["role_shared"],
+          handoff: {
+            status: "accepted",
+            sourceRole: "product",
+            targetRole: "ops",
+            targetAgentId: "ops",
+            targetBotId: "ops_bot",
+            correlationId: "handoff-123",
+            artifactPath: "collaboration/handoffs/2026-04-23/handoff-123.json",
+          },
+        },
+      },
+      onRecordError: vi.fn(),
+    });
+
+    expect(recordSessionMetaFromInboundMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionKey: "agent:ops:slack:channel:c123",
+        sessionMetaPatch: {
+          collaboration: {
+            mode: "enforced",
+            managedSurface: true,
+            spaceId: "project_main",
+            effectiveRole: "ops",
+            readableScopes: ["private", "role_shared"],
+            publishableScopes: ["role_shared"],
+            handoff: {
+              status: "accepted",
+              sourceRole: "product",
+              targetRole: "ops",
+              targetAgentId: "ops",
+              targetBotId: "ops_bot",
+              correlationId: "handoff-123",
+              artifactPath: "collaboration/handoffs/2026-04-23/handoff-123.json",
+            },
+          },
+        },
+      }),
+    );
+  });
 });

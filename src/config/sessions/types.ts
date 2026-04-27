@@ -110,6 +110,34 @@ export type SessionPluginDebugEntry = {
   lines: string[];
 };
 
+export type SessionCollaborationMemoryScope = "private" | "role_shared" | "space_shared";
+export type SessionCollaborationPublishScope = "role_shared" | "space_shared";
+
+export type SessionCollaborationHandoffStatus = "accepted" | "rejected";
+
+export type SessionCollaborationHandoff = {
+  correlationId?: string;
+  depth?: number;
+  status: SessionCollaborationHandoffStatus;
+  sourceRole?: string;
+  targetRole?: string;
+  targetAgentId?: string;
+  targetBotId?: string;
+  artifactPath?: string;
+  reasonCode?: string;
+};
+
+export type SessionCollaborationMeta = {
+  mode: "shadow" | "enforced";
+  managedSurface: boolean;
+  spaceId?: string;
+  ownerRole?: string;
+  effectiveRole?: string;
+  readableScopes: SessionCollaborationMemoryScope[];
+  publishableScopes?: SessionCollaborationPublishScope[];
+  handoff?: SessionCollaborationHandoff;
+};
+
 export type SessionEntry = {
   /**
    * Last delivered heartbeat payload (used to suppress duplicate heartbeat notifications).
@@ -257,6 +285,7 @@ export type SessionEntry = {
    * Each plugin owns and may overwrite only its own entry between turns.
    */
   pluginDebugEntries?: SessionPluginDebugEntry[];
+  collaboration?: SessionCollaborationMeta;
   acp?: SessionAcpMeta;
 };
 

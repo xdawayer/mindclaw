@@ -20,6 +20,7 @@ export type RecordInboundSession = (params: {
   ctx: MsgContext;
   groupResolution?: GroupKeyResolution | null;
   createIfMissing?: boolean;
+  sessionMetaPatch?: Partial<SessionEntry>;
   updateLastRoute?: InboundLastRouteUpdate;
   onRecordError: (err: unknown) => void;
 }) => Promise<void>;

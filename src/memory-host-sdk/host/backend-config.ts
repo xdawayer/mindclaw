@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
 import { parseDurationMs } from "../../cli/parse-duration.js";
+import { resolveCollaborationMemoryIndexPaths } from "../../collaboration/memory-paths.js";
 import type { SessionSendPolicyConfig } from "../../config/types.base.js";
 import type {
   MemoryBackend,
@@ -371,7 +372,15 @@ export function resolveMemoryBackendConfig(params: {
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim())
     .filter(Boolean);
-  const dedupedExtraPaths = Array.from(new Set(mergedExtraPaths));
+  const dedupedExtraPaths = Array.from(
+    new Set([
+      ...mergedExtraPaths,
+      ...resolveCollaborationMemoryIndexPaths({
+        cfg: params.cfg,
+        agentId: normalizedAgentId,
+      }),
+    ]),
+  );
   const searchExtraPaths = dedupedExtraPaths.map(
     (pathValue): { path: string; pattern?: string; name?: string } => ({ path: pathValue }),
   );

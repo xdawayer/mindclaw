@@ -301,6 +301,48 @@ describe("memory search config", () => {
     expect(resolved?.extraPaths).toEqual(["/shared/notes", "docs", "../team-notes"]);
   });
 
+  it("adds collaboration role and space index paths for the effective agent", () => {
+    const cfg = asConfig({
+      agents: {
+        list: [{ id: "product", default: true }],
+      },
+      collaboration: {
+        version: 1,
+        identities: {
+          users: {},
+        },
+        bots: {
+          product_bot: {
+            slackAccountId: "product",
+            agentId: "product",
+            role: "product",
+          },
+        },
+        roles: {
+          product: {
+            defaultAgentId: "product",
+            defaultBotId: "product_bot",
+            permissions: ["memory.read.role_shared", "memory.read.space_shared"],
+          },
+        },
+        spaces: {
+          project_main: {
+            kind: "project",
+            ownerRole: "product",
+            memberRoles: ["product"],
+          },
+        },
+      },
+    });
+
+    const resolved = resolveMemorySearchConfig(cfg, "product");
+
+    expect(resolved?.extraPaths).toEqual([
+      "collaboration/role_shared/product",
+      "collaboration/space_shared/project_main",
+    ]);
+  });
+
   it("normalizes multimodal settings", () => {
     const cfg = asConfig({
       agents: {

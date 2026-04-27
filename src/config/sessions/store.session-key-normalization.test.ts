@@ -154,4 +154,63 @@ describe("session store key normalization", () => {
     expect(store[CANONICAL_KEY]?.updatedAt).toBe(existingUpdatedAt);
     expect(store[CANONICAL_KEY]?.origin?.provider).toBe("webchat");
   });
+
+  it("persists and clears collaboration metadata patches without touching activity timestamps", async () => {
+    const existingUpdatedAt = Date.now();
+    await fs.writeFile(
+      storePath,
+      JSON.stringify(
+        {
+          [CANONICAL_KEY]: {
+            sessionId: "existing-session",
+            updatedAt: existingUpdatedAt,
+            chatType: "direct",
+            channel: "webchat",
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+    clearSessionStoreCacheForTest();
+
+    await recordSessionMetaFromInbound({
+      storePath,
+      sessionKey: CANONICAL_KEY,
+      ctx: createInboundContext(),
+      sessionMetaPatch: {
+        collaboration: {
+          mode: "enforced",
+          managedSurface: true,
+          spaceId: "project_main",
+          effectiveRole: "product",
+          readableScopes: ["private", "space_shared"],
+        },
+      },
+    });
+
+    let store = loadSessionStore(storePath, { skipCache: true });
+    expect(store[CANONICAL_KEY]?.updatedAt).toBe(existingUpdatedAt);
+    expect(store[CANONICAL_KEY]?.collaboration).toEqual({
+      mode: "enforced",
+      managedSurface: true,
+      spaceId: "project_main",
+      effectiveRole: "product",
+      readableScopes: ["private", "space_shared"],
+    });
+
+    await recordSessionMetaFromInbound({
+      storePath,
+      sessionKey: CANONICAL_KEY,
+      ctx: createInboundContext(),
+      sessionMetaPatch: {
+        collaboration: undefined,
+      },
+    });
+
+    store = loadSessionStore(storePath, { skipCache: true });
+    expect(store[CANONICAL_KEY]?.updatedAt).toBe(existingUpdatedAt);
+    expect(store[CANONICAL_KEY]?.collaboration).toBeUndefined();
+  });
 });
