@@ -114,6 +114,16 @@ export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
     policy: { bypassConfigGuard: true },
   },
   {
+    commandPath: ["collaboration", "validate"],
+    exact: true,
+    policy: { bypassConfigGuard: true },
+  },
+  {
+    commandPath: ["collaboration", "explain"],
+    exact: true,
+    policy: { bypassConfigGuard: true },
+  },
+  {
     commandPath: ["plugins", "update"],
     exact: true,
     policy: { hideBanner: true },
