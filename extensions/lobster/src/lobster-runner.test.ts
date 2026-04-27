@@ -430,4 +430,60 @@ describe("createEmbeddedLobsterRunner", () => {
       }),
     ).rejects.toThrow(/timed out|aborted/);
   });
+
+  it("runs through the published lobster package runtime", async () => {
+    const runner = createEmbeddedLobsterRunner();
+
+    const envelope = await runner.run({
+      action: "run",
+      pipeline:
+        'exec --json --shell "node -e \'process.stdout.write(JSON.stringify([{\\"hello\\":\\"world\\"}]))\'"',
+      cwd: process.cwd(),
+      timeoutMs: 5000,
+      maxStdoutBytes: 4096,
+    });
+
+    expect(envelope).toEqual({
+      ok: true,
+      status: "ok",
+      output: [{ hello: "world" }],
+      requiresApproval: null,
+    });
+  });
+
+  it("resumes approvals through the published lobster package runtime", async () => {
+    const runner = createEmbeddedLobsterRunner();
+
+    const pending = await runner.run({
+      action: "run",
+      pipeline:
+        "exec --json --shell \"node -e 'process.stdout.write(JSON.stringify([{\\\"a\\\":1}]))'\" | approve --prompt 'ok?' | pick a",
+      cwd: process.cwd(),
+      timeoutMs: 5000,
+      maxStdoutBytes: 4096,
+    });
+
+    if (!pending.ok) {
+      throw new Error(`expected pending to be ok, got error: ${pending.error.message}`);
+    }
+    expect(pending.status).toBe("needs_approval");
+    const resumeToken = pending.requiresApproval?.resumeToken;
+    expect(resumeToken).toEqual(expect.any(String));
+
+    const resumed = await runner.run({
+      action: "resume",
+      token: resumeToken,
+      approve: true,
+      cwd: process.cwd(),
+      timeoutMs: 5000,
+      maxStdoutBytes: 4096,
+    });
+
+    expect(resumed).toEqual({
+      ok: true,
+      status: "ok",
+      output: [{ a: 1 }],
+      requiresApproval: null,
+    });
+  });
 });
