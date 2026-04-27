@@ -5,7 +5,6 @@ import {
 import { createLazyChannelApprovalNativeRuntimeAdapter } from "openclaw/plugin-sdk/approval-handler-adapter-runtime";
 import type { ChannelApprovalNativeRuntimeAdapter } from "openclaw/plugin-sdk/approval-handler-runtime";
 import {
-  createChannelApproverDmTargetResolver,
   createChannelNativeOriginTargetResolver,
   resolveApprovalRequestSessionConversation,
 } from "openclaw/plugin-sdk/approval-native-runtime";
@@ -19,8 +18,10 @@ import { listSlackAccountIds } from "./accounts.js";
 import { isSlackApprovalAuthorizedSender } from "./approval-auth.js";
 import {
   getSlackExecApprovalApprovers,
+  hasSlackExecApprovalApprovers,
   isSlackExecApprovalAuthorizedSender,
   isSlackExecApprovalClientEnabled,
+  resolveSlackExecApprovalRequestTarget,
   resolveSlackExecApprovalTarget,
   shouldHandleSlackExecApprovalRequest,
 } from "./exec-approvals.js";
@@ -135,16 +136,30 @@ const resolveSlackOriginTarget = createChannelNativeOriginTargetResolver({
   resolveFallbackTarget: resolveSlackFallbackOriginTarget,
 });
 
-const resolveSlackApproverDmTargets = createChannelApproverDmTargetResolver({
-  shouldHandleRequest: ({ cfg, accountId, request }) =>
-    shouldHandleSlackExecApprovalRequest({
-      cfg,
-      accountId,
-      request,
-    }),
-  resolveApprovers: getSlackExecApprovalApprovers,
-  mapApprover: (approver) => ({ to: `user:${approver}` }),
-});
+async function resolveSlackApproverDmTargets(params: {
+  cfg: OpenClawConfig;
+  accountId?: string | null;
+  approvalKind: "exec" | "plugin";
+  request: ApprovalRequest;
+}) {
+  if (params.approvalKind !== "exec") {
+    return [];
+  }
+  if (
+    !shouldHandleSlackExecApprovalRequest({
+      cfg: params.cfg,
+      accountId: params.accountId,
+      request: params.request,
+    })
+  ) {
+    return [];
+  }
+  return getSlackExecApprovalApprovers({
+    cfg: params.cfg,
+    accountId: params.accountId,
+    request: params.request,
+  }).map((approver) => ({ to: `user:${approver}` }));
+}
 
 export const slackApprovalCapability = createApproverRestrictedNativeApprovalCapability({
   channel: "slack",
@@ -159,8 +174,7 @@ export const slackApprovalCapability = createApproverRestrictedNativeApprovalCap
     return `Approve it from the Web UI or terminal UI for now. Slack supports native exec approvals for this account. Configure \`${prefix}.execApprovals.approvers\` or \`commands.ownerAllowFrom\`; leave \`${prefix}.execApprovals.enabled\` unset/\`auto\` or set it to \`true\`.`;
   },
   listAccountIds: listSlackAccountIds,
-  hasApprovers: ({ cfg, accountId }) =>
-    getSlackExecApprovalApprovers({ cfg, accountId }).length > 0,
+  hasApprovers: ({ cfg, accountId }) => hasSlackExecApprovalApprovers({ cfg, accountId }),
   isExecAuthorizedSender: ({ cfg, accountId, senderId }) =>
     isSlackExecApprovalAuthorizedSender({ cfg, accountId, senderId }),
   isPluginAuthorizedSender: ({ cfg, accountId, senderId }) =>
@@ -169,12 +183,16 @@ export const slackApprovalCapability = createApproverRestrictedNativeApprovalCap
     isSlackExecApprovalClientEnabled({ cfg, accountId }),
   resolveNativeDeliveryMode: ({ cfg, accountId }) =>
     resolveSlackExecApprovalTarget({ cfg, accountId }),
+  resolveNativeDeliveryModeForRequest: ({ cfg, accountId, approvalKind, request }) =>
+    approvalKind === "exec"
+      ? resolveSlackExecApprovalRequestTarget({ cfg, accountId, request })
+      : resolveSlackExecApprovalTarget({ cfg, accountId }),
   requireMatchingTurnSourceChannel: true,
   resolveSuppressionAccountId: ({ target, request }) =>
     normalizeOptionalString(target.accountId) ??
     normalizeOptionalString(request.request.turnSourceAccountId),
   resolveOriginTarget: resolveSlackOriginTarget,
-  resolveApproverDmTargets: resolveSlackApproverDmTargets,
+  resolveApproverDmTargets: (params) => resolveSlackApproverDmTargets(params),
   notifyOriginWhenDmOnly: true,
   nativeRuntime: createLazyChannelApprovalNativeRuntimeAdapter({
     eventKinds: ["exec"],

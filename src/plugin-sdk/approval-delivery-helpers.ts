@@ -39,6 +39,12 @@ type ApproverRestrictedNativeApprovalParams = {
     cfg: OpenClawConfig;
     accountId?: string | null;
   }) => NativeApprovalDeliveryMode;
+  resolveNativeDeliveryModeForRequest?: (params: {
+    cfg: OpenClawConfig;
+    accountId?: string | null;
+    approvalKind: ApprovalKind;
+    request: NativeApprovalRequest;
+  }) => NativeApprovalDeliveryMode;
   requireMatchingTurnSourceChannel?: boolean;
   resolveSuppressionAccountId?: (params: DeliverySuppressionParams) => string | undefined;
   resolveOriginTarget?: (params: {
@@ -166,6 +172,8 @@ function buildApproverRestrictedNativeApprovalCapability(
             describeDeliveryCapabilities: ({
               cfg,
               accountId,
+              approvalKind,
+              request,
             }: {
               cfg: OpenClawConfig;
               accountId?: string | null;
@@ -174,7 +182,12 @@ function buildApproverRestrictedNativeApprovalCapability(
             }) => ({
               enabled: isExecInitiatingSurfaceEnabled({ cfg, accountId }),
               preferredSurface: normalizePreferredSurface(
-                params.resolveNativeDeliveryMode({ cfg, accountId }),
+                params.resolveNativeDeliveryModeForRequest?.({
+                  cfg,
+                  accountId,
+                  approvalKind,
+                  request,
+                }) ?? params.resolveNativeDeliveryMode({ cfg, accountId }),
               ),
               supportsOriginSurface: Boolean(params.resolveOriginTarget),
               supportsApproverDmSurface: Boolean(params.resolveApproverDmTargets),

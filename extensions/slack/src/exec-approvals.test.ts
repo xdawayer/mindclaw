@@ -1,7 +1,12 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import { describe, expect, it } from "vitest";
+import { clearSessionStoreCacheForTest } from "../../../src/config/sessions/store.js";
 import {
   getSlackExecApprovalApprovers,
+  hasSlackExecApprovalApprovers,
   isSlackExecApprovalApprover,
   isSlackExecApprovalAuthorizedSender,
   isSlackExecApprovalClientEnabled,
@@ -11,6 +16,9 @@ import {
   shouldHandleSlackExecApprovalRequest,
   shouldSuppressLocalSlackExecApprovalPrompt,
 } from "./exec-approvals.js";
+
+const STORE_PATH = path.join(os.tmpdir(), "openclaw-slack-exec-approvals-collab-test.json");
+const SESSION_KEY = "agent:product:slack:channel:c123:thread:1712345678.123456";
 
 function buildConfig(
   execApprovals?: NonNullable<NonNullable<OpenClawConfig["channels"]>["slack"]>["execApprovals"],
@@ -23,6 +31,101 @@ function buildConfig(
         appToken: "xapp-test",
         ...channelOverrides,
         execApprovals,
+      },
+    },
+  } as OpenClawConfig;
+}
+
+function writeStore(store: Record<string, unknown>) {
+  fs.writeFileSync(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  clearSessionStoreCacheForTest();
+}
+
+function buildCollaborationConfig(): OpenClawConfig {
+  return {
+    session: { store: STORE_PATH },
+    channels: {
+      slack: {
+        botToken: "xoxb-test",
+        appToken: "xapp-test",
+      },
+    },
+    collaboration: {
+      version: 1,
+      mode: "enforced",
+      identities: {
+        users: {
+          U111CEO01: {
+            identityId: "bob",
+            roles: ["ceo"],
+            defaultRole: "ceo",
+          },
+          U111OPS01: {
+            identityId: "carol",
+            roles: ["ops"],
+            defaultRole: "ops",
+          },
+          U111PM001: {
+            identityId: "alice",
+            roles: ["product"],
+            defaultRole: "product",
+          },
+        },
+      },
+      bots: {
+        ceo_bot: {
+          slackAccountId: "default",
+          agentId: "ceo",
+          role: "ceo",
+        },
+        ops_bot: {
+          slackAccountId: "default",
+          agentId: "ops",
+          role: "ops",
+        },
+        product_bot: {
+          slackAccountId: "default",
+          agentId: "product",
+          role: "product",
+        },
+      },
+      roles: {
+        ceo: {
+          defaultAgentId: "ceo",
+          defaultBotId: "ceo_bot",
+          permissions: ["exec.approve"],
+        },
+        ops: {
+          defaultAgentId: "ops",
+          defaultBotId: "ops_bot",
+          permissions: ["exec.approve"],
+        },
+        product: {
+          defaultAgentId: "product",
+          defaultBotId: "product_bot",
+          permissions: [],
+        },
+      },
+      spaces: {
+        project_main: {
+          kind: "project",
+          ownerRole: "product",
+          memberRoles: ["ceo", "ops", "product"],
+          slack: {
+            channels: ["C123"],
+          },
+        },
+      },
+      approvals: {
+        policies: {
+          high_risk_exec: {
+            when: ["tool:exec", "risk:high"],
+            approverRoles: ["ceo", "ops"],
+            delivery: ["dm", "origin_thread"],
+            agentFilter: ["product"],
+            spaceFilter: ["project_main"],
+          },
+        },
       },
     },
   } as OpenClawConfig;
@@ -89,6 +192,159 @@ describe("slack exec approvals", () => {
 
     expect(getSlackExecApprovalApprovers({ cfg })).toEqual(["U123", "U456", "U789"]);
     expect(isSlackExecApprovalApprover({ cfg, senderId: "U456" })).toBe(true);
+  });
+
+  it("returns collaboration approvers only when scoped to a matching request", () => {
+    writeStore({
+      [SESSION_KEY]: {
+        sessionId: "sess-1",
+        updatedAt: Date.now(),
+        collaboration: {
+          mode: "enforced",
+          managedSurface: true,
+          spaceId: "project_main",
+          ownerRole: "product",
+          effectiveRole: "product",
+          readableScopes: ["private"],
+          publishableScopes: [],
+        },
+      },
+    });
+
+    const cfg = buildCollaborationConfig();
+    const request = {
+      id: "req-collab-1",
+      request: {
+        command: "rm -rf /tmp/demo",
+        ask: "always",
+        security: "full",
+        agentId: "product",
+        sessionKey: SESSION_KEY,
+        turnSourceChannel: "slack",
+        turnSourceTo: "channel:C123",
+        turnSourceAccountId: "default",
+      },
+      createdAtMs: 0,
+      expiresAtMs: 1_000,
+    };
+
+    // Without request, the per-request approver set is unknowable, so we must
+    // not authorize anyone — even though collaboration policy approvers exist.
+    expect(getSlackExecApprovalApprovers({ cfg })).toEqual([]);
+    // Auto-enable still detects collaboration approvers via the count probe.
+    expect(hasSlackExecApprovalApprovers({ cfg })).toBe(true);
+    expect(isSlackExecApprovalClientEnabled({ cfg })).toBe(true);
+    // With request, approvers are policy-scoped.
+    expect(getSlackExecApprovalApprovers({ cfg, request })).toEqual(["U111CEO01", "U111OPS01"]);
+    expect(shouldHandleSlackExecApprovalRequest({ cfg, request })).toBe(true);
+  });
+
+  it("does not authorize a collaboration approver against a request governed by a different policy", () => {
+    writeStore({
+      [SESSION_KEY]: {
+        sessionId: "sess-1",
+        updatedAt: Date.now(),
+        collaboration: {
+          mode: "enforced",
+          managedSurface: true,
+          spaceId: "project_main",
+          ownerRole: "product",
+          effectiveRole: "product",
+          readableScopes: ["private"],
+          publishableScopes: [],
+        },
+      },
+    });
+
+    // Two policies. ceo-only policy approves high-risk exec; ops-only policy
+    // approves a different (low-risk) request type. Build a request that
+    // matches the ceo-only policy. A user who is approver only in the ops
+    // policy must not be authorized.
+    const cfg = buildCollaborationConfig();
+    cfg.collaboration!.approvals = {
+      policies: {
+        ceo_only_high_risk: {
+          when: ["tool:exec", "risk:high"],
+          approverRoles: ["ceo"],
+          delivery: ["dm"],
+          agentFilter: ["product"],
+          spaceFilter: ["project_main"],
+        },
+        ops_only_other: {
+          when: ["tool:exec"],
+          approverRoles: ["ops"],
+          delivery: ["dm"],
+          agentFilter: ["other-agent"],
+          spaceFilter: ["project_main"],
+        },
+      },
+    };
+
+    const ceoRequest = {
+      id: "req-policy-x",
+      request: {
+        command: "rm -rf /tmp/demo",
+        ask: "always",
+        security: "full",
+        agentId: "product",
+        sessionKey: SESSION_KEY,
+        turnSourceChannel: "slack",
+        turnSourceTo: "channel:C123",
+        turnSourceAccountId: "default",
+      },
+      createdAtMs: 0,
+      expiresAtMs: 1_000,
+    };
+
+    // Request is governed only by ceo policy -> only U111CEO01 should authorize.
+    expect(getSlackExecApprovalApprovers({ cfg, request: ceoRequest })).toEqual(["U111CEO01"]);
+
+    // Without scoping a request, no one is authorized.
+    expect(isSlackExecApprovalApprover({ cfg, senderId: "U111OPS01" })).toBe(false);
+    expect(isSlackExecApprovalApprover({ cfg, senderId: "U111CEO01" })).toBe(false);
+    expect(isSlackExecApprovalAuthorizedSender({ cfg, senderId: "U111OPS01" })).toBe(false);
+
+    // U111OPS01 is approver in ops policy but NOT for ceoRequest. The
+    // collaboration union must not bypass per-policy scoping.
+    expect(getSlackExecApprovalApprovers({ cfg })).toEqual([]);
+  });
+
+  it("does not handle collaboration approvals when no policy matches the request", () => {
+    writeStore({
+      [SESSION_KEY]: {
+        sessionId: "sess-1",
+        updatedAt: Date.now(),
+        collaboration: {
+          mode: "enforced",
+          managedSurface: true,
+          spaceId: "project_main",
+          ownerRole: "product",
+          effectiveRole: "product",
+          readableScopes: ["private"],
+          publishableScopes: [],
+        },
+      },
+    });
+
+    expect(
+      shouldHandleSlackExecApprovalRequest({
+        cfg: buildCollaborationConfig(),
+        request: {
+          id: "req-collab-2",
+          request: {
+            command: "echo ok",
+            ask: "off",
+            security: "allowlist",
+            agentId: "product",
+            sessionKey: SESSION_KEY,
+            turnSourceChannel: "slack",
+            turnSourceAccountId: "default",
+          },
+          createdAtMs: 0,
+          expiresAtMs: 1_000,
+        },
+      }),
+    ).toBe(false);
   });
 
   it("defaults target to dm", () => {

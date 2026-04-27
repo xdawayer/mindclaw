@@ -198,6 +198,165 @@ describe("slack native approval adapter", () => {
     expect(targets).toEqual([{ to: "user:U123APPROVER" }]);
   });
 
+  it("derives native approval delivery from collaboration policy on managed Slack sessions", async () => {
+    writeStore({
+      "agent:product:slack:channel:c123:thread:1712345678.123456": {
+        sessionId: "sess",
+        updatedAt: Date.now(),
+        collaboration: {
+          mode: "enforced",
+          managedSurface: true,
+          spaceId: "project_main",
+          ownerRole: "product",
+          effectiveRole: "product",
+          readableScopes: ["private"],
+          publishableScopes: [],
+        },
+      },
+    });
+
+    const cfg = {
+      session: { store: STORE_PATH },
+      channels: {
+        slack: {
+          botToken: "xoxb-test",
+          appToken: "xapp-test",
+        },
+      },
+      collaboration: {
+        version: 1,
+        mode: "enforced",
+        identities: {
+          users: {
+            U111CEO01: {
+              identityId: "bob",
+              roles: ["ceo"],
+              defaultRole: "ceo",
+            },
+            U111OPS01: {
+              identityId: "carol",
+              roles: ["ops"],
+              defaultRole: "ops",
+            },
+            U111PM001: {
+              identityId: "alice",
+              roles: ["product"],
+              defaultRole: "product",
+            },
+          },
+        },
+        bots: {
+          ceo_bot: {
+            slackAccountId: "default",
+            agentId: "ceo",
+            role: "ceo",
+          },
+          ops_bot: {
+            slackAccountId: "default",
+            agentId: "ops",
+            role: "ops",
+          },
+          product_bot: {
+            slackAccountId: "default",
+            agentId: "product",
+            role: "product",
+          },
+        },
+        roles: {
+          ceo: {
+            defaultAgentId: "ceo",
+            defaultBotId: "ceo_bot",
+            permissions: ["exec.approve"],
+          },
+          ops: {
+            defaultAgentId: "ops",
+            defaultBotId: "ops_bot",
+            permissions: ["exec.approve"],
+          },
+          product: {
+            defaultAgentId: "product",
+            defaultBotId: "product_bot",
+            permissions: [],
+          },
+        },
+        spaces: {
+          project_main: {
+            kind: "project",
+            ownerRole: "product",
+            memberRoles: ["ceo", "ops", "product"],
+            slack: {
+              channels: ["C123"],
+            },
+          },
+        },
+        approvals: {
+          policies: {
+            high_risk_exec: {
+              when: ["tool:exec", "risk:high"],
+              approverRoles: ["ceo", "ops"],
+              delivery: ["dm", "origin_thread"],
+              agentFilter: ["product"],
+              spaceFilter: ["project_main"],
+            },
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    const request = {
+      id: "req-collab-1",
+      request: {
+        command: "rm -rf /tmp/demo",
+        ask: "always",
+        security: "full",
+        agentId: "product",
+        turnSourceChannel: "slack",
+        turnSourceTo: "channel:C123",
+        turnSourceAccountId: "default",
+        turnSourceThreadId: "1712345678.123456",
+        sessionKey: "agent:product:slack:channel:c123:thread:1712345678.123456",
+      },
+      createdAtMs: 0,
+      expiresAtMs: 1000,
+    };
+
+    expect(
+      slackNativeApprovalAdapter.native?.describeDeliveryCapabilities({
+        cfg,
+        accountId: "default",
+        approvalKind: "exec",
+        request,
+      }),
+    ).toEqual({
+      enabled: true,
+      preferredSurface: "both",
+      supportsOriginSurface: true,
+      supportsApproverDmSurface: true,
+      notifyOriginWhenDmOnly: true,
+    });
+
+    expect(
+      await slackNativeApprovalAdapter.native?.resolveApproverDmTargets?.({
+        cfg,
+        accountId: "default",
+        approvalKind: "exec",
+        request,
+      }),
+    ).toEqual([{ to: "user:U111CEO01" }, { to: "user:U111OPS01" }]);
+
+    expect(
+      await slackNativeApprovalAdapter.native?.resolveOriginTarget?.({
+        cfg,
+        accountId: "default",
+        approvalKind: "exec",
+        request,
+      }),
+    ).toEqual({
+      to: "channel:C123",
+      threadId: "1712345678.123456",
+    });
+  });
+
   it("falls back to the session-bound origin target for plugin approvals", async () => {
     writeStore({
       "agent:main:slack:channel:c123": {

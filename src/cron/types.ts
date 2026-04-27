@@ -88,6 +88,21 @@ export type CronRunTelemetry = {
   usage?: CronUsageSummary;
 };
 
+export type CronJobCollaborationMeta = {
+  source: "collaboration";
+  sourceJobId: string;
+  audience:
+    | { kind: "identity"; id: string }
+    | { kind: "role"; id: string }
+    | { kind: "space"; id: string };
+  ownerRole: string;
+  effectiveRole: string;
+  readableScopes: Array<"private" | "role_shared" | "space_shared">;
+  publishableScopes?: Array<"role_shared" | "space_shared">;
+  sourceSpaces: string[];
+  spaceId?: string;
+};
+
 export type CronRunOutcome = {
   status: CronRunStatus;
   error?: string;
@@ -174,6 +189,7 @@ export type CronJob = CronJobBase<
   CronFailureAlert | false
 > & {
   state: CronJobState;
+  collaboration?: CronJobCollaborationMeta;
 };
 
 export type CronStoreFile = {

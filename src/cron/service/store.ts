@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { compileCollaborationCronJobs } from "../collaboration-source.js";
 import { normalizeCronJobIdentityFields } from "../normalize-job-identity.js";
 import { normalizeCronJobInput } from "../normalize.js";
 import { isInvalidCronSessionTargetIdError } from "../session-target.js";
@@ -72,6 +73,17 @@ export async function ensureLoaded(
     version: 1,
     jobs,
   };
+  const compiled = compileCollaborationCronJobs({
+    collaboration: state.deps.collaborationConfig,
+    nowMs: state.deps.nowMs(),
+  });
+  state.virtualJobIds = compiled.ids;
+  if (compiled.jobs.length > 0) {
+    state.store.jobs = [
+      ...state.store.jobs.filter((job) => !state.virtualJobIds.has(job.id)),
+      ...compiled.jobs,
+    ];
+  }
   state.storeLoadedAtMs = state.deps.nowMs();
   state.storeFileMtimeMs = fileMtimeMs;
 
@@ -98,7 +110,14 @@ export async function persist(state: CronServiceState, opts?: { skipBackup?: boo
   if (!state.store) {
     return;
   }
-  await saveCronStore(state.deps.storePath, state.store, opts);
+  const persistedStore =
+    state.virtualJobIds.size > 0
+      ? {
+          ...state.store,
+          jobs: state.store.jobs.filter((job) => !state.virtualJobIds.has(job.id)),
+        }
+      : state.store;
+  await saveCronStore(state.deps.storePath, persistedStore, opts);
   // Update file mtime after save to prevent immediate reload
   state.storeFileMtimeMs = await getFileMtimeMs(state.deps.storePath);
 }

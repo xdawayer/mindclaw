@@ -52,7 +52,12 @@ function stripRuntimeOnlyCronFields(store: CronStoreFile): unknown {
   return {
     version: store.version,
     jobs: store.jobs.map((job) => {
-      const { state: _state, updatedAtMs: _updatedAtMs, ...rest } = job;
+      const {
+        state: _state,
+        updatedAtMs: _updatedAtMs,
+        collaboration: _collaboration,
+        ...rest
+      } = job;
       return { ...rest, state: {} };
     }),
   };
