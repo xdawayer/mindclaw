@@ -390,6 +390,25 @@ type PreparedCronRunContext = {
   timeoutMs: number;
 };
 
+function applyCronCollaborationSessionMeta(params: {
+  entry: MutableCronSession["sessionEntry"];
+  job: CronJob;
+}) {
+  const collaboration = params.job.collaboration;
+  if (!collaboration || collaboration.source !== "collaboration") {
+    return;
+  }
+  params.entry.collaboration = {
+    mode: "enforced",
+    managedSurface: true,
+    ownerRole: collaboration.ownerRole,
+    effectiveRole: collaboration.effectiveRole,
+    readableScopes: [...collaboration.readableScopes],
+    publishableScopes: [...(collaboration.publishableScopes ?? [])],
+    ...(collaboration.spaceId ? { spaceId: collaboration.spaceId } : {}),
+  };
+}
+
 type CronPreparationResult =
   | { ok: true; context: PreparedCronRunContext }
   | { ok: false; result: RunCronAgentTurnResult };
@@ -481,6 +500,10 @@ async function prepareCronRunContext(params: {
     ...result,
     sessionId: runSessionId,
     sessionKey: runSessionKey,
+  });
+  applyCronCollaborationSessionMeta({
+    entry: cronSession.sessionEntry,
+    job: input.job,
   });
   if (!cronSession.sessionEntry.label?.trim() && baseSessionKey.startsWith("cron:")) {
     const labelSuffix =

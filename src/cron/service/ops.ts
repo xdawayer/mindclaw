@@ -284,6 +284,9 @@ export async function update(state: CronServiceState, id: string, patch: CronJob
   return await locked(state, async () => {
     warnIfDisabled(state, "update");
     await ensureLoaded(state, { skipRecompute: true });
+    if (state.virtualJobIds.has(id)) {
+      throw new Error(`cron collaboration job is read-only: ${id}`);
+    }
     const job = findJobOrThrow(state, id);
     const now = state.deps.nowMs();
     applyJobPatch(job, patch, { defaultAgentId: state.deps.defaultAgentId });
@@ -333,6 +336,9 @@ export async function remove(state: CronServiceState, id: string) {
   return await locked(state, async () => {
     warnIfDisabled(state, "remove");
     await ensureLoaded(state);
+    if (state.virtualJobIds.has(id)) {
+      throw new Error(`cron collaboration job is read-only: ${id}`);
+    }
     const before = state.store?.jobs.length ?? 0;
     if (!state.store) {
       return { ok: false, removed: false } as const;

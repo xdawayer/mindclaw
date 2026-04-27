@@ -275,6 +275,7 @@ export function buildGatewayCronService(params: {
     storePath,
     cronEnabled,
     cronConfig: params.cfg.cron,
+    collaborationConfig: params.cfg.collaboration,
     defaultAgentId,
     resolveSessionStorePath,
     sessionStorePath,
