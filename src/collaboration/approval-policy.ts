@@ -18,7 +18,7 @@ export type CollaborationExecApprovalResolution = {
 };
 
 function sortedEntries<T>(record: Record<string, T>): Array<[string, T]> {
-  return Object.entries(record).sort(([left], [right]) => left.localeCompare(right));
+  return Object.entries(record).toSorted(([left], [right]) => left.localeCompare(right));
 }
 
 function resolveManagedCollaborationMeta(params: {
@@ -27,11 +27,7 @@ function resolveManagedCollaborationMeta(params: {
 }) {
   const persisted = resolvePersistedApprovalRequestSessionEntry(params);
   const collaboration = persisted?.entry.collaboration;
-  if (
-    !collaboration ||
-    collaboration.mode !== "enforced" ||
-    collaboration.managedSurface !== true
-  ) {
+  if (!collaboration || collaboration.mode !== "enforced" || !collaboration.managedSurface) {
     return null;
   }
   return collaboration;

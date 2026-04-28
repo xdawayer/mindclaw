@@ -528,9 +528,7 @@ describe("prepareSlackMessage collaboration shadow mode", () => {
 
     const prepared = await prepareSlackMessage({
       ctx,
-      account: createSlackTestAccount({
-        config: config.channels?.slack?.accounts?.default,
-      }),
+      account: createSlackTestAccount(config.channels?.slack?.accounts?.default),
       message: createChannelMessage("C123"),
       opts: { source: "message", wasMentioned: true },
     });

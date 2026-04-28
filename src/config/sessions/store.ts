@@ -687,8 +687,8 @@ export async function recordSessionMetaFromInbound(params: {
       const combinedPatch =
         patch || params.sessionMetaPatch
           ? {
-              ...(patch ?? {}),
-              ...(params.sessionMetaPatch ?? {}),
+              ...patch,
+              ...params.sessionMetaPatch,
             }
           : null;
       if (!combinedPatch) {

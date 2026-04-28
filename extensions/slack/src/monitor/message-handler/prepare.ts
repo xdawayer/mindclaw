@@ -51,6 +51,7 @@ import {
   persistSlackCollaborationHandoffArtifact,
   persistSlackCollaborationAuditEvent,
   resolveSlackCollaborationState,
+  type SlackCollaborationSessionMeta,
 } from "../collaboration.runtime.js";
 import { stripSlackMentionsForCommandDetection } from "../commands.js";
 import {
@@ -150,7 +151,7 @@ function resolveSlackCollaborationWarningCodes(params: {
     (Boolean(channelConfig?.users?.length) ||
       typeof channelConfig?.allowBots === "boolean" ||
       (typeof expectedRequireMention === "boolean" &&
-        channelConfig.requireMention !== expectedRequireMention));
+        channelConfig?.requireMention !== expectedRequireMention));
   if (hasExplicitLegacyChannelPolicy) {
     warningCodes.add("COLLAB_CONFLICT_SLACK_CHANNEL_POLICY_OVERRIDDEN");
   }
@@ -462,11 +463,15 @@ export async function prepareSlackMessage(params: {
         replyToMode,
         threadContext,
       });
-      return readPersistedCollaborationSessionMeta({
+      const persisted = readPersistedCollaborationSessionMeta({
         cfg,
         agentId: collaborationRoute.agentId,
         sessionKey: resolved.sessionKey,
       });
+      if (!persisted || !persisted.managedSurface) {
+        return undefined;
+      }
+      return persisted as SlackCollaborationSessionMeta;
     },
   });
   const effectiveRoute = collaboration?.mode === "enforced" ? collaboration.effectiveRoute : route;

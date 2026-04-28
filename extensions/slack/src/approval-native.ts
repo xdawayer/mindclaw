@@ -9,6 +9,7 @@ import {
   resolveApprovalRequestSessionConversation,
 } from "openclaw/plugin-sdk/approval-native-runtime";
 import type { ChannelApprovalCapability } from "openclaw/plugin-sdk/channel-contract";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import type { ExecApprovalRequest, PluginApprovalRequest } from "openclaw/plugin-sdk/infra-runtime";
 import {
   normalizeLowercaseStringOrEmpty,
@@ -124,11 +125,12 @@ function slackTargetsMatch(a: SlackOriginTarget, b: SlackOriginTarget): boolean 
 
 const resolveSlackOriginTarget = createChannelNativeOriginTargetResolver({
   channel: "slack",
-  shouldHandleRequest: ({ cfg, accountId, request }) =>
+  shouldHandleRequest: ({ cfg, accountId, approvalKind, request }) =>
+    approvalKind === "exec" &&
     shouldHandleSlackExecApprovalRequest({
       cfg,
       accountId,
-      request,
+      request: request as ExecApprovalRequest,
     }),
   resolveTurnSourceTarget: resolveTurnSourceSlackOriginTarget,
   resolveSessionTarget: resolveSessionSlackOriginTarget,
@@ -145,11 +147,12 @@ async function resolveSlackApproverDmTargets(params: {
   if (params.approvalKind !== "exec") {
     return [];
   }
+  const execRequest = params.request as ExecApprovalRequest;
   if (
     !shouldHandleSlackExecApprovalRequest({
       cfg: params.cfg,
       accountId: params.accountId,
-      request: params.request,
+      request: execRequest,
     })
   ) {
     return [];
@@ -157,7 +160,7 @@ async function resolveSlackApproverDmTargets(params: {
   return getSlackExecApprovalApprovers({
     cfg: params.cfg,
     accountId: params.accountId,
-    request: params.request,
+    request: execRequest,
   }).map((approver) => ({ to: `user:${approver}` }));
 }
 
@@ -185,7 +188,11 @@ export const slackApprovalCapability = createApproverRestrictedNativeApprovalCap
     resolveSlackExecApprovalTarget({ cfg, accountId }),
   resolveNativeDeliveryModeForRequest: ({ cfg, accountId, approvalKind, request }) =>
     approvalKind === "exec"
-      ? resolveSlackExecApprovalRequestTarget({ cfg, accountId, request })
+      ? resolveSlackExecApprovalRequestTarget({
+          cfg,
+          accountId,
+          request: request as ExecApprovalRequest,
+        })
       : resolveSlackExecApprovalTarget({ cfg, accountId }),
   requireMatchingTurnSourceChannel: true,
   resolveSuppressionAccountId: ({ target, request }) =>
@@ -205,7 +212,7 @@ export const slackApprovalCapability = createApproverRestrictedNativeApprovalCap
       shouldHandleSlackExecApprovalRequest({
         cfg,
         accountId,
-        request,
+        request: request as ExecApprovalRequest,
       }),
     load: async () =>
       (await import("./approval-handler.runtime.js"))
