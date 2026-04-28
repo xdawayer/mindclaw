@@ -256,7 +256,7 @@ function resolveMentionedRole(params: {
     return null;
   }
 
-  for (const roleId of Object.keys(collaboration.roles).sort()) {
+  for (const roleId of Object.keys(collaboration.roles).toSorted()) {
     if (roleId === params.ownerRole) {
       continue;
     }

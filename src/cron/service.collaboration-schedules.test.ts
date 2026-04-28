@@ -99,7 +99,9 @@ function createCronService(storePath: string, cfg: OpenClawConfig, runIsolatedAg
     enqueueSystemEvent: vi.fn(),
     requestHeartbeatNow: vi.fn(),
     runIsolatedAgentJob:
-      (runIsolatedAgentJob as Parameters<typeof CronService>[0]["runIsolatedAgentJob"]) ??
+      (runIsolatedAgentJob as ConstructorParameters<
+        typeof CronService
+      >[0]["runIsolatedAgentJob"]) ??
       (vi.fn(async () => ({ status: "ok" as const, summary: "digest done" })) as never),
   });
 }

@@ -36,10 +36,10 @@ export function resolveCollaborationMemoryIndexPaths(params: {
   }
 
   const paths = new Set<string>();
-  for (const roleId of [...roleIds].sort()) {
+  for (const roleId of [...roleIds].toSorted()) {
     paths.add(`collaboration/role_shared/${roleId}`);
   }
-  for (const [spaceId, space] of Object.entries(collaboration.spaces ?? {}).sort(([a], [b]) =>
+  for (const [spaceId, space] of Object.entries(collaboration.spaces ?? {}).toSorted(([a], [b]) =>
     a.localeCompare(b),
   )) {
     const memberRoles = new Set((space.memberRoles ?? []).map((roleId) => normalizeId(roleId)));
@@ -48,5 +48,5 @@ export function resolveCollaborationMemoryIndexPaths(params: {
     }
   }
 
-  return [...paths].sort((a, b) => a.localeCompare(b));
+  return [...paths].toSorted((a, b) => a.localeCompare(b));
 }

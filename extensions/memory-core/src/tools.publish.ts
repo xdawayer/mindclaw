@@ -171,7 +171,7 @@ export function createMemoryPublishTool(options: {
           agentSessionKey: options.agentSessionKey,
         });
 
-        if (!isMemoryPublishAllowedByCollaboration({ cfg, scope, gate })) {
+        if (!isMemoryPublishAllowedByCollaboration({ cfg, scope, gate }) || !gate) {
           return jsonResult({
             scope,
             path: requestedPath,

@@ -5,7 +5,7 @@ import type { CronDelivery, CronJob, CronJobCollaborationMeta, CronSchedule } fr
 export const COLLABORATION_CRON_JOB_ID_PREFIX = "collab:";
 
 function sortedEntries<T>(record: Record<string, T>) {
-  return Object.entries(record).sort(([a], [b]) => a.localeCompare(b));
+  return Object.entries(record).toSorted(([a], [b]) => a.localeCompare(b));
 }
 
 function resolveRoleDefaultAccountId(

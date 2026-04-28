@@ -94,7 +94,7 @@ export function hasSlackExecApprovalApprovers(params: {
   );
 }
 
-function resolveSlackExecApprovalRequestTarget(params: {
+export function resolveSlackExecApprovalRequestTarget(params: {
   cfg: OpenClawConfig;
   accountId?: string | null;
   request: ExecApprovalRequest;
@@ -207,5 +207,3 @@ export function shouldHandleSlackExecApprovalRequest(params: {
     fallbackAgentIdFromSessionKey: true,
   });
 }
-
-export { resolveSlackExecApprovalRequestTarget };
